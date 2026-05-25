@@ -1,0 +1,2685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEAL Automated Reporting & Processing Tool</title>
+    <!-- Tailwind CSS for modern responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for data summary visual charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet.js CSS and JS for lightweight, zero-dependency offline GIS Map plotting -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- PapaParse for robust CSV parsing and generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" onerror="console.warn('PapaParse CDN blocked. Falling back to built-in CSV engine.')"></script>
+    <!-- SheetJS (XLSX) with robust fallback chain -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="this.onerror=null; this.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; this.onerror=function(){ this.onerror=null; console.warn('SheetJS CDN blocked. Falling back to built-in Multi-Sheet XML engine.'); };"></script>
+    <!-- Custom styling to customize Tailwind theme defaults -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for spreadsheet feels */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #0d9488;
+        }
+        /* Leaflet Map height safety overrides */
+        #leaflet-map-container {
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- App Container -->
+    <div class="flex flex-col md:flex-row min-h-screen">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="w-full md:w-64 bg-slate-900 text-white flex flex-col border-r border-slate-800 shrink-0">
+            <!-- Sidebar Header -->
+            <div class="p-5 border-b border-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-teal-600 rounded-lg">
+                        <i class="fa-solid fa-chart-line text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-sm tracking-wide text-slate-100">CORE MEAL TOOL</h2>
+                        <p class="text-xs text-slate-400">v2.0.0 • Field Pro Suite</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="flex-1 p-4 space-y-1" id="nav-menu">
+                <button onclick="switchTab('upload')" id="btn-upload" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition bg-teal-600 text-white">
+                    <i class="fa-solid fa-file-import w-5 text-left"></i>
+                    <span>1. Upload & Setup</span>
+                </button>
+                <button onclick="switchTab('clean')" id="btn-clean" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-400 hover:bg-slate-800 hover:text-white">
+                    <i class="fa-solid fa-broom w-5 text-left"></i>
+                    <span>2. Clean & Transform</span>
+                </button>
+                <button onclick="switchTab('process')" id="btn-process" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-400 hover:bg-slate-800 hover:text-white">
+                    <i class="fa-solid fa-gears w-5 text-left"></i>
+                    <span>3. Process & Delta</span>
+                </button>
+                <button onclick="switchTab('narrative')" id="btn-narrative" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-400 hover:bg-slate-800 hover:text-white">
+                    <i class="fa-solid fa-file-lines w-5 text-left"></i>
+                    <span>4. Reports & GIS Map</span>
+                </button>
+                <button onclick="switchTab('export')" id="btn-export" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-400 hover:bg-slate-800 hover:text-white">
+                    <i class="fa-solid fa-download w-5 text-left"></i>
+                    <span>5. Export Results</span>
+                </button>
+            </nav>
+
+            <!-- Connection Status Panel -->
+            <div class="px-4 py-3 mx-4 mb-4 bg-slate-950/40 border border-slate-800 rounded-lg space-y-2">
+                <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Engine Status</h3>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400">CSV & TSV Engine:</span>
+                    <span id="badge-csv" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-900">Zero-Dependency Active</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400">Excel Loader:</span>
+                    <span id="badge-excel" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-900">Evaluating...</span>
+                </div>
+            </div>
+
+            <!-- Sheet Live Status Widget -->
+            <div class="p-4 border-t border-slate-800 bg-slate-950/50">
+                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Live Sheet Status</h3>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Total Records:</span>
+                        <span id="sidebar-total-records" class="font-semibold text-teal-400">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Total Columns:</span>
+                        <span id="sidebar-total-cols" class="font-semibold text-teal-400">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Logs Recorded:</span>
+                        <span id="sidebar-total-logs" class="font-semibold text-teal-400">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="p-4 border-t border-slate-800 text-center text-xs text-slate-500">
+                Designed for MEAL Officers & Managers<br>© 2026 Core MEAL Toolkit
+            </div>
+        </aside>
+
+        <!-- Main Panel -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header Bar -->
+            <header class="bg-white border-b border-slate-200 p-4 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div>
+                    <h1 class="text-xl font-bold text-slate-900">MEAL Automated Reporting & Processing Tool</h1>
+                    <p class="text-xs text-slate-500 mt-0.5">Clean beneficiary registries, run custom summaries, and compile instant narratives in seconds.</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button onclick="loadSimulatedData()" class="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md text-xs font-semibold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Load Simulated MEAL Data
+                    </button>
+                    <button onclick="resetToRaw()" class="px-3 py-1.5 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-semibold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Dynamic Workspace Viewports -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6" id="viewports">
+
+                <!-- TAB 1: UPLOAD & SETUP -->
+                <section id="tab-upload" class="tab-pane space-y-6">
+                    <!-- Inline alert advising how to proceed if blocked -->
+                    <div id="sandbox-warning-banner" class="p-4 bg-amber-50 border-l-4 border-amber-500 text-amber-900 rounded-r-lg text-xs space-y-2">
+                        <div class="flex items-center gap-2 font-bold">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm"></i>
+                            <span>Excel Binary Engine Sandboxed/Blocked</span>
+                        </div>
+                        <p>No problem! If browser sandbox controls block binary <code>.xlsx</code> decoding, you have <strong>two robust zero-dependency solutions</strong> below:</p>
+                        <ul class="list-disc pl-5 space-y-1 font-semibold text-amber-800">
+                            <li>Option A: Copy cells directly from your Excel window and paste them into the sandbox-safe Clipboard Box.</li>
+                            <li>Option B: Export your Excel spreadsheet as a <strong>CSV (Comma Delimited)</strong> file and upload it.</li>
+                        </ul>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- Upload & Paste Tab Container -->
+                        <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+                            <div class="flex border-b border-slate-200 pb-2">
+                                <button onclick="toggleUploadTab('file')" id="tab-toggle-file" class="px-4 py-2 text-xs font-bold text-teal-600 border-b-2 border-teal-600 transition-all flex items-center gap-1.5">
+                                    <i class="fa-solid fa-file-arrow-up"></i> Upload File (.csv)
+                                </button>
+                                <button onclick="toggleUploadTab('paste')" id="tab-toggle-paste" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-all flex items-center gap-1.5">
+                                    <i class="fa-solid fa-clipboard"></i> Paste from Excel (Sandbox Safe)
+                                </button>
+                            </div>
+
+                            <!-- Pane A: Drag Drop File Uploader -->
+                            <div id="pane-file-upload" class="space-y-4">
+                                <div class="border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-lg p-8 transition text-center bg-slate-50/50 cursor-pointer relative" id="drag-drop-zone">
+                                    <input type="file" id="file-uploader" accept=".csv,.xlsx,.xls" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                                    <div class="space-y-2">
+                                        <i class="fa-solid fa-file-csv text-slate-400 text-4xl"></i>
+                                        <p class="text-sm font-medium text-slate-700">Drag & drop your files here or click to browse</p>
+                                        <p class="text-xs text-slate-400" id="file-uploader-formats">Supports Comma Delimited CSV formats</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Pane B: Sandbox Clipboard Area -->
+                            <div id="pane-clipboard-paste" class="hidden space-y-4">
+                                <p class="text-xs text-slate-500">Select columns or rows in Excel, copy them (<kbd class="px-1 py-0.5 bg-slate-100 rounded border">Ctrl + C</kbd>), and paste directly below:</p>
+                                <textarea id="sandbox-clipboard" rows="6" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-teal-500" placeholder="Paste spreadsheet data here (TSV format copied directly from Excel)..." oninput="processClipboardPaste()"></textarea>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[10px] text-slate-400 italic">No plugins or external library engines required.</span>
+                                    <button onclick="processClipboardPaste()" class="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold">Parse Paste Grid</button>
+                                </div>
+                            </div>
+
+                            <div id="upload-status" class="hidden p-3 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-800 flex items-center gap-2">
+                                <i class="fa-solid fa-circle-check text-teal-600 text-sm"></i>
+                                <span id="upload-status-text">File loaded successfully!</span>
+                            </div>
+                        </div>
+
+                        <!-- Onboarding quickcard -->
+                        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-md font-bold text-slate-900 mb-2 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bullseye text-emerald-600"></i> Quick Onboarding Demo
+                                </h3>
+                                <p class="text-sm text-slate-600 leading-relaxed mb-4">
+                                    No local tracking sheet ready? Try our simulated MEAL beneficiary tracking template immediately. It mimics actual distributions, complete with missing items, formatting issues, and duplicate columns. Works fully offline!
+                                </p>
+                            </div>
+                            <button onclick="loadSimulatedData()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold shadow transition-all flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-database"></i> Generate Simulated MEAL Dataset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Spreadsheet overview -->
+                    <div id="overview-container" class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hidden">
+                        <h3 class="text-md font-bold text-slate-900 mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-teal-600"></i> Spreadsheet Profile Summary & Data Grid
+                        </h3>
+                        
+                        <!-- Metadata KPIs -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                                <div class="text-2xl font-bold text-teal-600" id="kpi-total-records">0</div>
+                                <div class="text-xs text-slate-500 uppercase tracking-wider font-semibold mt-1">Total Records</div>
+                            </div>
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                                <div class="text-2xl font-bold text-teal-600" id="kpi-total-cols">0</div>
+                                <div class="text-xs text-slate-500 uppercase tracking-wider font-semibold mt-1">Total Columns</div>
+                            </div>
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                                <div class="text-2xl font-bold text-rose-600" id="kpi-missing-vals">0</div>
+                                <div class="text-xs text-slate-500 uppercase tracking-wider font-semibold mt-1">Missing Cells</div>
+                            </div>
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                                <div class="text-2xl font-bold text-amber-600" id="kpi-duplicates">0</div>
+                                <div class="text-xs text-slate-500 uppercase tracking-wider font-semibold mt-1">Duplicate Rows</div>
+                            </div>
+                        </div>
+
+                        <!-- Mini Table View -->
+                        <div class="overflow-x-auto border border-slate-200 rounded-lg max-h-[300px]">
+                            <table class="w-full text-left text-xs border-collapse" id="overview-table">
+                                <thead class="bg-slate-100 text-slate-700 uppercase tracking-wider font-semibold sticky top-0 border-b border-slate-200">
+                                    <tr id="overview-thead-tr">
+                                        <!-- Header labels generated dynamically -->
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200 text-slate-600 bg-white" id="overview-tbody">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-xs text-slate-400 mt-2 text-right" id="table-row-counter">Showing first 15 records</div>
+                    </div>
+                </section>
+
+                <!-- TAB 2: CLEAN DATA -->
+                <section id="tab-clean" class="tab-pane space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- Cleaning Config Column -->
+                        <div class="lg:col-span-1 space-y-4">
+                            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 mb-4 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-sliders text-teal-600"></i> Quick Cleaner Panel
+                                </h3>
+
+                                <div class="space-y-4">
+                                    <!-- PII Sanitizer Accordion (Strategic feature) -->
+                                    <div class="border border-teal-200 rounded-lg overflow-hidden bg-teal-50/30 border-l-4 border-l-teal-600">
+                                        <button onclick="toggleAccordion('acc-pii')" class="w-full flex items-center justify-between p-3 text-left font-bold text-xs text-teal-900 hover:bg-teal-50">
+                                            <span class="flex items-center gap-2"><i class="fa-solid fa-user-shield text-teal-600"></i> 1. PII Sanitizer & Anonymizer</span>
+                                            <i id="acc-pii-icon" class="fa-solid fa-chevron-down text-teal-600 transition-transform"></i>
+                                        </button>
+                                        <div id="acc-pii" class="p-3 bg-white border-t border-teal-100 hidden text-xs space-y-3">
+                                            <p class="text-slate-500 leading-relaxed">Protects vulnerable participants by hashing personal identifiers (like Names, Phones, IDs) while retaining critical demographics for donor compliance reviews.</p>
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Select Column to Anonymize:</label>
+                                                <select id="pii-col-select" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700"></select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Protection Profile Mode:</label>
+                                                <div class="space-y-1">
+                                                    <label class="flex items-center gap-2"><input type="radio" name="pii-mode" value="hash" checked> Cryptographic Synthetic Hashing</label>
+                                                    <label class="flex items-center gap-2"><input type="radio" name="pii-mode" value="mask"> Partial Character Masking (*******)</label>
+                                                </div>
+                                            </div>
+                                            <button onclick="applyPIISanitizer()" class="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold">Anonymize Target Column</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Remove Duplicates Acc -->
+                                    <div class="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                                        <button onclick="toggleAccordion('acc-dups')" class="w-full flex items-center justify-between p-3 text-left font-medium text-xs text-slate-700 hover:bg-slate-100">
+                                            <span class="flex items-center gap-2"><i class="fa-solid fa-clone text-teal-600"></i> Duplicate Rows</span>
+                                            <i id="acc-dups-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                                        </button>
+                                        <div id="acc-dups" class="p-3 bg-white border-t border-slate-100 hidden text-xs space-y-2">
+                                            <p class="text-slate-500">Drop records that duplicate exactly. Current count: <strong id="clean-dups-count" class="text-amber-600">0</strong></p>
+                                            <button onclick="dropDuplicates()" class="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold">Drop Duplicate Rows</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Handle Missing Values Acc -->
+                                    <div class="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                                        <button onclick="toggleAccordion('acc-nulls')" class="w-full flex items-center justify-between p-3 text-left font-medium text-xs text-slate-700 hover:bg-slate-100">
+                                            <span class="flex items-center gap-2"><i class="fa-solid fa-circle-question text-teal-600"></i> Handle Missing Values</span>
+                                            <i id="acc-nulls-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                                        </button>
+                                        <div id="acc-nulls" class="p-3 bg-white border-t border-slate-100 hidden text-xs space-y-3">
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Select Column:</label>
+                                                <select id="null-col-select" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700"></select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Resolution Strategy:</label>
+                                                <div class="space-y-1">
+                                                    <label class="flex items-center gap-2"><input type="radio" name="null-strat" value="drop" checked> Drop entire row</label>
+                                                    <label class="flex items-center gap-2"><input type="radio" name="null-strat" value="avg"> Fill with calculated Mean/Mode</label>
+                                                    <label class="flex items-center gap-2"><input type="radio" name="null-strat" value="custom"> Fill with custom text/number</label>
+                                                </div>
+                                            </div>
+                                            <div id="null-custom-div" class="hidden">
+                                                <input type="text" id="null-custom-val" placeholder="Custom fill value" class="w-full p-1.5 border border-slate-200 rounded text-xs">
+                                            </div>
+                                            <button onclick="cleanMissingValues()" class="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold">Apply Clean-up</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Rename Columns Acc -->
+                                    <div class="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                                        <button onclick="toggleAccordion('acc-rename')" class="w-full flex items-center justify-between p-3 text-left font-medium text-xs text-slate-700 hover:bg-slate-100">
+                                            <span class="flex items-center gap-2"><i class="fa-solid fa-pen-to-square text-teal-600"></i> Rename Columns</span>
+                                            <i id="acc-rename-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                                        </button>
+                                        <div id="acc-rename" class="p-3 bg-white border-t border-slate-100 hidden text-xs space-y-3">
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Target Column:</label>
+                                                <select id="rename-col-select" onchange="onRenameColChange()" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700"></select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">New Label:</label>
+                                                <input type="text" id="rename-col-input" class="w-full p-1.5 border border-slate-200 rounded text-xs">
+                                            </div>
+                                            <button onclick="renameColumn()" class="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold">Rename Column</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Filter Rows Acc -->
+                                    <div class="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                                        <button onclick="toggleAccordion('acc-filter')" class="w-full flex items-center justify-between p-3 text-left font-medium text-xs text-slate-700 hover:bg-slate-100">
+                                            <span class="flex items-center gap-2"><i class="fa-solid fa-filter text-teal-600"></i> Filter Rows (Keep Selected)</span>
+                                            <i id="acc-filter-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                                        </button>
+                                        <div id="acc-filter" class="p-3 bg-white border-t border-slate-100 hidden text-xs space-y-3">
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Target Filter Column:</label>
+                                                <select id="filter-col-select" onchange="onFilterColChange()" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700"></select>
+                                            </div>
+                                            <div id="filter-numeric-inputs" class="hidden space-y-2">
+                                                <p class="text-[10px] text-slate-400 font-semibold uppercase">Filter by numeric range</p>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="number" id="filter-num-min" placeholder="Min" class="w-1/2 p-1 border border-slate-200 rounded text-xs">
+                                                    <span class="text-slate-400">to</span>
+                                                    <input type="number" id="filter-num-max" placeholder="Max" class="w-1/2 p-1 border border-slate-200 rounded text-xs">
+                                                </div>
+                                            </div>
+                                            <div id="filter-categorical-inputs" class="hidden space-y-2">
+                                                <p class="text-[10px] text-slate-400 font-semibold uppercase">Filter by category options</p>
+                                                <div id="filter-cat-checklist" class="border border-slate-200 rounded p-2 max-h-32 overflow-y-auto space-y-1 bg-slate-50">
+                                                    <!-- Dynamic category options -->
+                                                </div>
+                                            </div>
+                                            <button onclick="applyFilter()" class="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold">Apply Keep Filter</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Cast Datatypes Acc -->
+                                    <div class="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                                        <button onclick="toggleAccordion('acc-cast')" class="w-full flex items-center justify-between p-3 text-left font-medium text-xs text-slate-700 hover:bg-slate-100">
+                                            <span class="flex items-center gap-2"><i class="fa-solid fa-arrow-down-up-across-line text-teal-600"></i> Cast Column Data Types</span>
+                                            <i id="acc-cast-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                                        </button>
+                                        <div id="acc-cast" class="p-3 bg-white border-t border-slate-100 hidden text-xs space-y-3">
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Target Column:</label>
+                                                <select id="cast-col-select" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700"></select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Target Cast Type:</label>
+                                                <select id="cast-type-select" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700">
+                                                    <option value="string">Text / String</option>
+                                                    <option value="integer">Integer Number</option>
+                                                    <option value="float">Float/Decimal Number</option>
+                                                    <option value="date">Date Formatter</option>
+                                                </select>
+                                            </div>
+                                            <button onclick="castDataType()" class="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold">Apply Type Casting</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Power Query Transformers Accordion -->
+                                    <div class="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50 shadow-sm border-teal-200">
+                                        <button onclick="toggleAccordion('acc-powerquery')" class="w-full flex items-center justify-between p-3 text-left font-semibold text-xs text-teal-800 bg-teal-50 hover:bg-teal-100 transition">
+                                            <span class="flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-teal-600"></i> Power Query Transforms</span>
+                                            <i id="acc-powerquery-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                                        </button>
+                                        <div id="acc-powerquery" class="p-3 bg-white border-t border-slate-100 hidden text-xs space-y-3">
+                                            <div>
+                                                <label class="block text-slate-600 font-semibold mb-1">Transformation Module:</label>
+                                                <select id="pq-type-select" onchange="onPQTypeChange()" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700 font-medium">
+                                                    <option value="conditional">Add Conditional Column</option>
+                                                    <option value="math">Column Math Operations</option>
+                                                    <option value="text">Text Transform (Case/Trim/Split)</option>
+                                                    <option value="merge">Merge Columns together</option>
+                                                </select>
+                                            </div>
+
+                                            <!-- Module: Conditional Column -->
+                                            <div id="pq-sec-conditional" class="space-y-2">
+                                                <div>
+                                                    <label class="block text-[10px] text-slate-500 font-semibold uppercase">New Column Name</label>
+                                                    <input type="text" id="pq-cond-newname" placeholder="e.g. Vulnerability_Class" class="w-full p-1.5 border border-slate-200 rounded text-xs">
+                                                </div>
+                                                <div class="grid grid-cols-3 gap-1">
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">If Column</label>
+                                                        <select id="pq-cond-col" class="w-full p-1.5 border border-slate-200 rounded text-[11px] bg-slate-50"></select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Operator</label>
+                                                        <select id="pq-cond-op" class="w-full p-1.5 border border-slate-200 rounded text-[11px] bg-slate-50">
+                                                            <option value="equals">Equals</option>
+                                                            <option value="notequal">Not Equal</option>
+                                                            <option value="gt">Greater Than (&gt;)</option>
+                                                            <option value="lt">Less Than (&lt;)</option>
+                                                            <option value="contains">Contains text</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Value to Compare</label>
+                                                        <input type="text" id="pq-cond-val" placeholder="Value" class="w-full p-1.5 border border-slate-200 rounded text-[11px]">
+                                                    </div>
+                                                </div>
+                                                <div class="grid grid-cols-2 gap-1.5">
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Then Output</label>
+                                                        <input type="text" id="pq-cond-then" placeholder="e.g. Vulnerable" class="w-full p-1.5 border border-slate-200 rounded text-[11px]">
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Else Output</label>
+                                                        <input type="text" id="pq-cond-else" placeholder="e.g. Standard" class="w-full p-1.5 border border-slate-200 rounded text-[11px]">
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Module: Math Operations -->
+                                            <div id="pq-sec-math" class="space-y-2 hidden">
+                                                <div>
+                                                    <label class="block text-[10px] text-slate-500 font-semibold uppercase">New Column Name</label>
+                                                    <input type="text" id="pq-math-newname" placeholder="e.g. Household_USD_Allocated" class="w-full p-1.5 border border-slate-200 rounded text-xs">
+                                                </div>
+                                                <div class="grid grid-cols-3 gap-1 items-end">
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Column A</label>
+                                                        <select id="pq-math-colA" class="w-full p-1.5 border border-slate-200 rounded text-[11px] bg-slate-50"></select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Operator</label>
+                                                        <select id="pq-math-op" class="w-full p-1.5 border border-slate-200 rounded text-[11px] bg-slate-50">
+                                                            <option value="add">+</option>
+                                                            <option value="subtract">-</option>
+                                                            <option value="multiply">*</option>
+                                                            <option value="divide">/</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Column B / Scalar</label>
+                                                        <select id="pq-math-colB-select" onchange="onPQMathColBChange()" class="w-full p-1.5 border border-slate-200 rounded text-[11px] bg-slate-50">
+                                                            <option value="__constant__">Use Constant Value</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div id="pq-math-constant-div">
+                                                    <label class="block text-[10px] text-slate-500 font-semibold uppercase">Constant Value</label>
+                                                    <input type="number" id="pq-math-const" value="1" step="any" class="w-full p-1.5 border border-slate-200 rounded text-xs">
+                                                </div>
+                                            </div>
+
+                                            <!-- Module: Text Transformation -->
+                                            <div id="pq-sec-text" class="space-y-2 hidden">
+                                                <div>
+                                                    <label class="block text-slate-600 font-semibold mb-1">Target Column:</label>
+                                                    <select id="pq-text-col" class="w-full p-1.5 border border-slate-200 rounded bg-slate-50 text-slate-700"></select>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-slate-600 font-semibold mb-1">Action Type:</label>
+                                                    <div class="space-y-1 bg-slate-50 p-2 rounded border border-slate-200">
+                                                        <label class="flex items-center gap-2"><input type="radio" name="pq-text-action" value="upper" checked onchange="togglePQTextDelim()"> UPPERCASE</label>
+                                                        <label class="flex items-center gap-2"><input type="radio" name="pq-text-action" value="lower" onchange="togglePQTextDelim()"> lowercase</label>
+                                                        <label class="flex items-center gap-2"><input type="radio" name="pq-text-action" value="trim" onchange="togglePQTextDelim()"> Trim Whitespaces</label>
+                                                        <label class="flex items-center gap-2"><input type="radio" name="pq-text-action" value="split" onchange="togglePQTextDelim()"> Split Column by Delimiter</label>
+                                                    </div>
+                                                </div>
+                                                <div id="pq-text-split-div" class="hidden bg-slate-50 p-2.5 rounded border border-slate-200 space-y-2">
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label class="block text-[10px] text-slate-500 font-semibold uppercase">Delimiter</label>
+                                                            <input type="text" id="pq-text-delim" placeholder="e.g. -" class="w-full p-1 border border-slate-200 rounded text-xs">
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-[10px] text-slate-500 font-semibold uppercase">Part Index</label>
+                                                            <input type="number" id="pq-text-part" value="0" min="0" class="w-full p-1 border border-slate-200 rounded text-xs">
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">New Split Column Name</label>
+                                                        <input type="text" id="pq-text-splitname" placeholder="e.g. Sub_Code" class="w-full p-1.5 border border-slate-200 rounded text-xs">
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Module: Merge Columns -->
+                                            <div id="pq-sec-merge" class="space-y-2 hidden">
+                                                <div>
+                                                    <label class="block text-[10px] text-slate-500 font-semibold uppercase">New Column Name</label>
+                                                    <input type="text" id="pq-merge-newname" placeholder="e.g. Location_Group_Code" class="w-full p-1.5 border border-slate-200 rounded text-xs">
+                                                </div>
+                                                <div class="grid grid-cols-3 gap-1">
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Col 1</label>
+                                                        <select id="pq-merge-col1" class="w-full p-1.5 border border-slate-200 rounded text-[11px] bg-slate-50"></select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Separator</label>
+                                                        <input type="text" id="pq-merge-sep" placeholder="e.g. - or /" class="w-full p-1.5 border border-slate-200 rounded text-[11px]">
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] text-slate-500 font-semibold uppercase">Col 2</label>
+                                                        <select id="pq-merge-col2" class="w-full p-1.5 border border-slate-200 rounded text-[11px] bg-slate-50"></select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <button onclick="applyPowerQuery()" class="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold shadow transition flex items-center justify-center gap-1.5">
+                                                <i class="fa-solid fa-play"></i> Run Power Transformation
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Spreadsheet live preview -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 mb-4 flex items-center justify-between">
+                                    <span class="flex items-center gap-2"><i class="fa-solid fa-table text-teal-600"></i> Live Spreadsheet Working Preview</span>
+                                    <span id="clean-preview-total" class="text-xs text-slate-400 font-normal">Showing first 25 rows</span>
+                                </h3>
+                                <div class="overflow-x-auto border border-slate-200 rounded-lg max-h-[400px]">
+                                    <table class="w-full text-left text-xs border-collapse" id="clean-table">
+                                        <thead class="bg-slate-100 text-slate-700 uppercase tracking-wider font-semibold sticky top-0 border-b border-slate-200">
+                                            <tr id="clean-thead-tr"></tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200 text-slate-600 bg-white" id="clean-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Operations Log audit list -->
+                    <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                        <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-list-check text-teal-600"></i> Data Transformation Audit Trail (History Log)
+                        </h3>
+                        <div class="border border-slate-200 rounded bg-slate-50/50 p-4 max-h-48 overflow-y-auto space-y-2" id="audit-trail-container">
+                            <p class="text-xs text-slate-400 italic">No modifications done yet. Load or modify data to construct audit records.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 3: PROCESS & PIVOT -->
+                <section id="tab-process" class="tab-pane space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- Configuration controls -->
+                        <div class="lg:col-span-1 space-y-4">
+                            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+                                <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-table-pivot text-teal-600"></i> Summary Configuration
+                                </h3>
+                                
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Group By Column (Rows)</label>
+                                    <select id="pivot-group-col" class="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50"></select>
+                                </div>
+
+                                <div class="p-3 bg-slate-50 rounded-lg space-y-2 border border-slate-200/60">
+                                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                                        <input type="checkbox" id="pivot-split-chk" onchange="togglePivotSplitCol()"> Enable Cross-Tab (Split Columns)
+                                    </label>
+                                    <div id="pivot-split-div" class="hidden">
+                                        <select id="pivot-split-col" class="w-full p-2 border border-slate-200 rounded text-xs bg-white"></select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Choose Aggregation Action</label>
+                                    <div class="grid grid-cols-2 gap-1" id="pivot-agg-actions">
+                                        <label class="flex items-center gap-2 p-1.5 border border-slate-200 rounded text-xs bg-slate-50/50 cursor-pointer"><input type="radio" name="pivot-agg" value="count" checked onchange="togglePivotValCol()"> Record Count</label>
+                                        <label class="flex items-center gap-2 p-1.5 border border-slate-200 rounded text-xs bg-slate-50/50 cursor-pointer"><input type="radio" name="pivot-agg" value="sum" onchange="togglePivotValCol()"> Sum</label>
+                                        <label class="flex items-center gap-2 p-1.5 border border-slate-200 rounded text-xs bg-slate-50/50 cursor-pointer"><input type="radio" name="pivot-agg" value="avg" onchange="togglePivotValCol()"> Average</label>
+                                        <label class="flex items-center gap-2 p-1.5 border border-slate-200 rounded text-xs bg-slate-50/50 cursor-pointer"><input type="radio" name="pivot-agg" value="min" onchange="togglePivotValCol()"> Min</label>
+                                        <label class="flex items-center gap-2 p-1.5 border border-slate-200 rounded text-xs bg-slate-50/50 cursor-pointer"><input type="radio" name="pivot-agg" value="max" onchange="togglePivotValCol()"> Max</label>
+                                    </div>
+                                </div>
+
+                                <div id="pivot-val-col-div" class="hidden">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Calculate Numerical Indicator Column</label>
+                                    <select id="pivot-val-col" class="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50"></select>
+                                </div>
+
+                                <button onclick="calculatePivot()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold transition-all">Generate Summary & Plot Chart</button>
+                            </div>
+
+                            <!-- Baseline vs. Endline Wizard Card (Strategic feature) -->
+                            <div class="bg-white rounded-xl border border-teal-200 p-5 shadow-sm space-y-4 border-l-4 border-l-teal-600">
+                                <h3 class="text-sm font-bold text-teal-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-code-compare text-teal-600"></i> Baseline vs. Endline Delta Wizard
+                                </h3>
+                                <p class="text-[11px] text-slate-500 leading-relaxed">Select paired monitoring indicators to dynamically measure program performance, variance trends, and statistical deltas across intervention points.</p>
+                                
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Baseline Column (Pre-Aid):</label>
+                                    <select id="delta-base-col" class="w-full p-1.5 border border-slate-200 rounded text-xs bg-slate-50"></select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Endline Column (Post-Aid):</label>
+                                    <select id="delta-end-col" class="w-full p-1.5 border border-slate-200 rounded text-xs bg-slate-50"></select>
+                                </div>
+
+                                <button onclick="calculateIndicatorDelta()" class="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold transition">Analyze Impact Deltas</button>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Aggregation outputs -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <!-- Baseline Endline Results Card (Appeared on activation) -->
+                            <div id="delta-results-card" class="bg-white rounded-xl border border-teal-200 p-5 shadow-sm hidden">
+                                <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-square-poll-vertical text-teal-600"></i> Programmatic Impact (Delta Outcomes)
+                                </h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                    <div class="bg-slate-50 border border-slate-100 p-3 rounded-lg text-center">
+                                        <div id="delta-base-mean" class="text-xl font-bold text-slate-700">0.0</div>
+                                        <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Pre-Aid Mean</div>
+                                    </div>
+                                    <div class="bg-slate-50 border border-slate-100 p-3 rounded-lg text-center">
+                                        <div id="delta-end-mean" class="text-xl font-bold text-slate-700">0.0</div>
+                                        <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Post-Aid Mean</div>
+                                    </div>
+                                    <div class="bg-teal-50 border border-teal-100 p-3 rounded-lg text-center">
+                                        <div id="delta-pct-change" class="text-xl font-bold text-teal-600">+0.0%</div>
+                                        <div class="text-[10px] text-teal-700 font-semibold uppercase tracking-wider">Average Performance Delta</div>
+                                    </div>
+                                </div>
+                                <div class="bg-teal-50/50 p-3 rounded border border-teal-100 text-xs text-teal-900 leading-relaxed font-medium" id="delta-narrative-output">
+                                    No variance analyzed yet. Select baseline/endline columns to calculate outcome variance.
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-calculator text-teal-600"></i> Processed Summary Result
+                                </h3>
+                                <div class="overflow-x-auto border border-slate-200 rounded-lg max-h-[220px] bg-white">
+                                    <table class="w-full text-left text-xs border-collapse" id="pivot-table">
+                                        <thead class="bg-slate-100 text-slate-700 uppercase tracking-wider font-semibold sticky top-0 border-b border-slate-200">
+                                            <tr id="pivot-thead-tr"></tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200 text-slate-600" id="pivot-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Interactive Chart -->
+                            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-bar text-teal-600"></i> Summary Visualization
+                                </h3>
+                                <div class="relative w-full h-[250px] flex items-center justify-center">
+                                    <canvas id="pivot-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 4: NARRATIVE & INSIGHTS -->
+                <section id="tab-narrative" class="tab-pane space-y-6 hidden">
+                    
+                    <!-- GIS Map Integration Card (Strategic Feature) -->
+                    <div id="gis-map-card" class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4 hidden">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-earth-asia text-teal-600"></i> Interactive Field Distribution GIS Map (Leaflet.js)
+                            </h3>
+                            <span class="px-2 py-0.5 bg-teal-100 text-teal-800 text-[10px] font-bold rounded">Offline Coordinate Plotter</span>
+                        </div>
+                        <p class="text-xs text-slate-500 leading-relaxed">Coordinate points auto-detected inside your spreadsheet. Map coordinates are loaded and clustered on-the-fly entirely in the local browser canvas.</p>
+                        
+                        <!-- Map Placement container -->
+                        <div class="w-full h-[320px] rounded-lg border border-slate-200 bg-slate-100 relative" id="leaflet-map-container"></div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+                        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-signature text-teal-600"></i> MEAL Descriptive Report & Automated Executive Analysis
+                        </h2>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            The descriptive text report below has been generated and updated dynamically using calculations on your current cleaned beneficiary tracking ledger.
+                        </p>
+
+                        <!-- Highlight box for copy-paste narrative content -->
+                        <div class="bg-emerald-50/50 border-l-4 border-emerald-600 rounded-r-lg p-5 text-emerald-950 font-medium leading-relaxed text-sm space-y-3" id="narrative-box">
+                            <!-- Populated on data update -->
+                        </div>
+
+                        <!-- Operational Insights lists -->
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-1.5">
+                                <i class="fa-solid fa-circle-info text-teal-600"></i> Program & Operational Core Insights
+                            </h3>
+                            <div id="insights-container" class="space-y-3">
+                                <!-- Insight boxes populated dynamically -->
+                            </div>
+                        </div>
+
+                        <div class="border-t border-slate-100 pt-4 space-y-2">
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Direct Clipboard Copier Utility</label>
+                            <textarea id="narrative-textarea" rows="8" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 focus:outline-teal-500"></textarea>
+                            <button onclick="copyNarrativeText()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-semibold transition">
+                                <i class="fa-solid fa-copy"></i> Copy Narrative text to Clipboard
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 5: EXPORT RESULTS -->
+                <section id="tab-export" class="tab-pane space-y-6 hidden">
+                    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6 max-w-2xl mx-auto">
+                        <div class="text-center space-y-2">
+                            <div class="p-3 bg-teal-50 text-teal-600 rounded-full inline-block mx-auto">
+                                <i class="fa-solid fa-file-excel text-4xl"></i>
+                            </div>
+                            <h2 class="text-xl font-bold text-slate-900">Export Cleaned Results to Excel Workbook</h2>
+                            <p class="text-sm text-slate-500" id="export-engine-desc">Generate a structured multi-sheet spreadsheet containing your cleaned record data, pivot aggregates, and historical data transformations for audit controls.</p>
+                        </div>
+
+                        <div class="space-y-4 border-t border-b border-slate-100 py-6">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Custom Export Filename</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="export-filename" class="flex-1 p-2 border border-slate-200 rounded text-xs bg-slate-50" placeholder="MEAL_Report_Clean">
+                                    <span class="text-slate-400 text-xs font-medium" id="export-format-ext">.xlsx</span>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 space-y-1.5">
+                                <p class="font-bold text-slate-800">What is included in the download?</p>
+                                <ul class="list-disc list-inside space-y-1 text-slate-500">
+                                    <li><strong>Sheet 1: Cleaned_Data</strong> - Contains your current cleaned rows and updated header labels.</li>
+                                    <li><strong>Sheet 2: Cleaning_Audit_Trail</strong> - Detailed operational tracking of modifications (who, when, what was replaced).</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button id="btn-main-excel" onclick="exportExcelFile()" class="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-download"></i> <span id="btn-excel-text">Generate & Download Excel File (.xlsx)</span>
+                            </button>
+                            <button onclick="exportCSVFile()" class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg border border-slate-200 transition-all flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-file-csv"></i> Save CSV
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- UI ALERT CONTAINER -->
+                <div id="app-alert" class="hidden fixed bottom-5 right-5 z-50 max-w-sm bg-slate-900 text-white p-4 rounded-xl shadow-2xl border border-slate-800 flex items-start gap-3 transition-all duration-300 transform translate-y-10">
+                    <div id="alert-icon-wrapper" class="p-1 text-teal-400 bg-slate-800 rounded-lg text-lg">
+                        <i class="fa-solid fa-circle-info"></i>
+                    </div>
+                    <div class="flex-1 space-y-1 text-xs">
+                        <h4 id="alert-title" class="font-bold">Info</h4>
+                        <p id="alert-msg" class="text-slate-400 leading-relaxed"></p>
+                    </div>
+                    <button onclick="closeAlert()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <!-- MEAL User Guide Accordion -->
+                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm shrink-0">
+                    <button onclick="toggleAccordion('app-instructions')" class="w-full flex items-center justify-between p-4 text-left font-bold text-sm text-slate-800 bg-slate-50 hover:bg-slate-100 transition">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-circle-question text-teal-600"></i> MEAL User Guide & App Instructions</span>
+                        <i id="app-instructions-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                    </button>
+                    <div id="app-instructions" class="p-5 border-t border-slate-100 hidden text-xs leading-relaxed space-y-3 text-slate-600">
+                        <h4 class="font-bold text-slate-800 text-sm">Getting Started with the Tool:</h4>
+                        <ol class="list-decimal list-inside space-y-1.5 text-slate-500">
+                            <li><strong>Upload Dataset:</strong> Go to the <strong>1. Upload & Setup</strong> tab. Drag or click to upload your spreadsheet. If you are just testing, hit <strong>Load Simulated MEAL Data</strong> to test immediately.</li>
+                            <li><strong>Review Profile:</strong> Review the KPI card summaries containing total column indicators, null count balances, and duplicate counts.</li>
+                            <li><strong>Cleaning & Transform:</strong> Open the <strong>2. Clean & Transform</strong> tab. Drop exact duplicates, select columns to fill empty cell rows, or expand the <strong>Power Query Transforms</strong> block to build conditional columns, execute math operations, run casing transformations, or split/merge columns!</li>
+                            <li><strong>Process Pivots & Summaries:</strong> Move to <strong>3. Process & Pivot</strong> to summarize aggregates like Mean, Sum, and Record Counts with live plotting.</li>
+                            <li><strong>Draft Reports & Download:</strong> Inspect natural descriptions in <strong>4. Reports & GIS Map</strong>, then download the structured multi-sheet Excel package on the final tab!</li>
+                        </ol>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC WORKBENCH -->
+    <script>
+        // Global App State Management
+        window.state = {
+            rawDf: null,         // Raw untouched dataset loaded
+            cleanedDf: null,     // Working cleaned version
+            history: [],         // Operational trail actions
+            columns: [],         // Active array of columns
+            activeTab: 'upload', // Active navigation panel
+            activeAccordion: null
+        };
+
+        // ChartJS and Leaflet instance placeholders to avoid memory leaks
+        let activeChartInstance = null;
+        let leafletMapInstance = null;
+        let mapMarkersLayer = null;
+
+        // Custom Trigger Alerts on UI
+        function triggerAlert(title, message, type = 'info') {
+            const alertEl = document.getElementById('app-alert');
+            const titleEl = document.getElementById('alert-title');
+            const msgEl = document.getElementById('alert-msg');
+            const wrapperEl = document.getElementById('alert-icon-wrapper');
+
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+
+            // Apply theme variations
+            if (type === 'error') {
+                wrapperEl.className = 'p-1 text-rose-500 bg-rose-950 rounded-lg text-lg';
+                wrapperEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i>';
+            } else if (type === 'success') {
+                wrapperEl.className = 'p-1 text-emerald-400 bg-emerald-950 rounded-lg text-lg';
+                wrapperEl.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+            } else {
+                wrapperEl.className = 'p-1 text-teal-400 bg-teal-950 rounded-lg text-lg';
+                wrapperEl.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+            }
+
+            alertEl.classList.remove('hidden', 'translate-y-10');
+            alertEl.classList.add('flex', 'translate-y-0');
+
+            // Autoclose after 4 seconds
+            setTimeout(closeAlert, 4000);
+        }
+
+        function closeAlert() {
+            const alertEl = document.getElementById('app-alert');
+            alertEl.classList.remove('flex', 'translate-y-0');
+            alertEl.classList.add('hidden', 'translate-y-10');
+        }
+
+        // Evaluate library loading on run
+        window.addEventListener('load', () => {
+            const badgeExcel = document.getElementById('badge-excel');
+            const fileFormats = document.getElementById('file-uploader-formats');
+            const warningBanner = document.getElementById('sandbox-warning-banner');
+            const extFormat = document.getElementById('export-format-ext');
+            const btnText = document.getElementById('btn-excel-text');
+
+            if (typeof XLSX === 'undefined') {
+                badgeExcel.textContent = "Sandbox Fallback Mode";
+                badgeExcel.className = "px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-900";
+                
+                fileFormats.innerHTML = "<span class='text-amber-600 font-semibold'>Supports CSV (Comma Separated) Formats</span>";
+                warningBanner.classList.remove('hidden');
+                
+                extFormat.textContent = ".xls (Excel Multi-Sheet XML)";
+                btnText.textContent = "Download Multi-Sheet Excel XML (.xls)";
+            } else {
+                badgeExcel.textContent = "Active (CDN)";
+                badgeExcel.className = "px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-900";
+            }
+        });
+
+        // Toggle Upload tab options
+        function toggleUploadTab(type) {
+            const tabFile = document.getElementById('tab-toggle-file');
+            const tabPaste = document.getElementById('tab-toggle-paste');
+            const paneFile = document.getElementById('pane-file-upload');
+            const panePaste = document.getElementById('pane-clipboard-paste');
+
+            if (type === 'file') {
+                tabFile.className = "px-4 py-2 text-xs font-bold text-teal-600 border-b-2 border-teal-600 transition-all flex items-center gap-1.5";
+                tabPaste.className = "px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-all flex items-center gap-1.5";
+                paneFile.classList.remove('hidden');
+                panePaste.classList.add('hidden');
+            } else {
+                tabFile.className = "px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-all flex items-center gap-1.5";
+                tabPaste.className = "px-4 py-2 text-xs font-bold text-teal-600 border-b-2 border-teal-600 transition-all flex items-center gap-1.5";
+                paneFile.classList.add('hidden');
+                panePaste.classList.remove('hidden');
+            }
+        }
+
+        // Process TSV/CSV data copied from local spreadsheet software
+        function processClipboardPaste() {
+            const pasteArea = document.getElementById('sandbox-clipboard');
+            const rawText = pasteArea.value.trim();
+            if (!rawText) return;
+
+            try {
+                const rows = rawText.split(/\r?\n/);
+                if (rows.length < 2) {
+                    triggerAlert("Paste Failed", "Clipboard text does not contain valid columns or rows.", "error");
+                    return;
+                }
+
+                // Split headers by tabs
+                const headers = rows[0].split('\t').map(h => h.trim().replace(/"/g, ''));
+                const list = [];
+
+                for (let i = 1; i < rows.length; i++) {
+                    const rowText = rows[i];
+                    if (!rowText.trim()) continue;
+
+                    const cols = rowText.split('\t');
+                    const obj = {};
+                    
+                    headers.forEach((h, index) => {
+                        let val = cols[index] !== undefined ? cols[index].trim() : null;
+                        if (val === '') val = null;
+                        
+                        // Parse values safely
+                        if (val !== null) {
+                            if (val.replace(/[^0-9.-]/g, '') === val && !isNaN(Number(val))) {
+                                val = Number(val);
+                            } else {
+                                val = val.replace(/^"|"$/g, ''); // strip outer quotes
+                            }
+                        }
+                        obj[h] = val;
+                    });
+                    list.push(obj);
+                }
+
+                if (list.length > 0) {
+                    processParsedData(list, "Pasted_Spreadsheet_Grid");
+                    triggerAlert("Imported Success", `Loaded ${list.length} records successfully using local clipboard buffer!`, "success");
+                    pasteArea.value = ""; // clear textarea
+                } else {
+                    triggerAlert("Data Empty", "No data rows extracted from clipboard selection.", "error");
+                }
+            } catch (err) {
+                console.error(err);
+                triggerAlert("Clipboard Parse Error", "Failed to parse text matrix. Make sure you copy direct cells from Excel.", "error");
+            }
+        }
+
+        // Action recorder for history auditable log
+        function recordAction(actionText) {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            const log = `[${timeStr}] ${actionText}`;
+            window.state.history.unshift(log); // Prepend so new items show on top
+            updateAuditTrailUI();
+            updateLiveIndicators();
+        }
+
+        function updateAuditTrailUI() {
+            const container = document.getElementById('audit-trail-container');
+            if (window.state.history.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 italic">No modifications done yet. Load or modify data to construct audit records.</p>';
+                return;
+            }
+            container.innerHTML = window.state.history.map(log => `
+                <div class="flex items-start gap-2 text-xs border-b border-slate-100 pb-1 text-slate-600">
+                    <span class="text-teal-600 font-mono shrink-0 font-semibold">•</span>
+                    <span>${log}</span>
+                </div>
+            `).join('');
+        }
+
+        // Toggle Expandable Info Boxes and Menus
+        function toggleAccordion(id) {
+            const content = document.getElementById(id);
+            const icon = document.getElementById(id + '-icon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                if (icon) icon.classList.add('rotate-180');
+            } else {
+                content.classList.add('hidden');
+                if (icon) icon.classList.remove('rotate-180');
+            }
+        }
+
+        // Tab selection controller
+        function switchTab(tabId) {
+            window.state.activeTab = tabId;
+            
+            // Toggle panel displays
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+
+            // Highlight Active Nav Button
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.className = "nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-400 hover:bg-slate-800 hover:text-white";
+            });
+            const activeBtn = document.getElementById('btn-' + tabId);
+            if (activeBtn) {
+                activeBtn.className = "nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition bg-teal-600 text-white";
+            }
+
+            // Perform subtab refreshes on navigate
+            if (tabId === 'clean') {
+                renderCleanDataTab();
+            } else if (tabId === 'process') {
+                populatePivotDropdowns();
+                populateDeltaDropdowns();
+                calculatePivot();
+            } else if (tabId === 'narrative') {
+                compileNarrativeReport();
+                initializeLeafletGISMap();
+            }
+        }
+
+        // Built-In, RFC 4180 compliant CSV Parser to handle PapaParse CDN blockages
+        function customCSVParser(text) {
+            const lines = [];
+            let row = [""];
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const c = text[i];
+                const next = text[i+1];
+                if (c === '"') {
+                    if (inQuotes && next === '"') {
+                        row[row.length - 1] += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (c === ',' && !inQuotes) {
+                    row.push('');
+                } else if ((c === '\r' || c === '\n') && !inQuotes) {
+                    if (c === '\r' && next === '\n') { i++; }
+                    lines.push(row);
+                    row = [''];
+                } else {
+                    row[row.length - 1] += c;
+                }
+            }
+            if (row.length > 1 || row[0] !== '') {
+                lines.push(row);
+            }
+
+            if (lines.length < 2) return [];
+            const headers = lines[0].map(h => h.trim());
+            const result = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.length === 1 && line[0] === '') continue; // Skip blank rows
+                const obj = {};
+                headers.forEach((h, index) => {
+                    let val = line[index] !== undefined ? line[index].trim() : null;
+                    if (val === '') val = null;
+                    if (val !== null && !isNaN(val)) {
+                        val = Number(val);
+                    }
+                    obj[h] = val;
+                });
+                result.push(obj);
+            }
+            return result;
+        }
+
+        // Simulated dataset creation function
+        function generateSampleDataset() {
+            const regions = ["Yangon", "Mandalay", "Shan State", "Rakhine", "Ayeyarwady"];
+            
+            // Map region names to real physical coordinates around Myanmar for authentic spatial plotting
+            const coords = {
+                "Yangon": { lat: 16.8409, lon: 96.1735 },
+                "Mandalay": { lat: 21.9588, lon: 96.0891 },
+                "Shan State": { lat: 20.7888, lon: 97.0337 },
+                "Rakhine": { lat: 20.1500, lon: 93.5000 },
+                "Ayeyarwady": { lat: 17.0000, lon: 95.0000 }
+            };
+
+            const activities = ["Cash Distribution", "Wash Hygiene Kit", "Child Nutrition Supplement", "Agricultural Training"];
+            const genders = ["Female", "Male", "Other"];
+            const supportVals = [15, 25, 45, 60, 100];
+            
+            const list = [];
+            const records = 150;
+            
+            const pickRandom = (arr, weights = null) => {
+                if (!weights) {
+                    return arr[Math.floor(Math.random() * arr.length)];
+                }
+                const r = Math.random();
+                let cum = 0;
+                for (let i = 0; i < arr.length; i++) {
+                    cum += weights[i];
+                    if (r <= cum) return arr[i];
+                }
+                return arr[arr.length - 1];
+            };
+
+            const randomNormal = (mean, std) => {
+                const u1 = Math.random() || 0.0001;
+                const u2 = Math.random() || 0.0001;
+                const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+                return Math.round(z0 * std + mean);
+            };
+
+            for (let i = 0; i < records; i++) {
+                const reg = pickRandom(regions, [0.3, 0.2, 0.2, 0.15, 0.15]);
+                const baseCoord = coords[reg];
+
+                // Add small spatial offsets to scatter beneficiary coordinates around Myanmar cities
+                const latOffset = (Math.random() - 0.5) * 0.4;
+                const lonOffset = (Math.random() - 0.5) * 0.4;
+
+                const baseIncome = Math.max(10, randomNormal(45, 12));
+                // Endline values demonstrating standard intervention progression
+                const endIncome = Math.round(baseIncome * (1 + (Math.random() * 0.4 + 0.05)));
+
+                const row = {
+                    "Beneficiary_ID": `BEN-${2026000 + i}`,
+                    "Beneficiary_Name": `Participant Name ${100 + i}`, // Added mock PII column to demo the PII Sanitizer
+                    "Date": new Date(2026, 0, Math.floor(Math.random() * 90) + 1).toISOString().split('T')[0],
+                    "Region": reg,
+                    "Latitude": Number((baseCoord.lat + latOffset).toFixed(5)),
+                    "Longitude": Number((baseCoord.lon + lonOffset).toFixed(5)),
+                    "Activity": pickRandom(activities, [0.4, 0.2, 0.2, 0.2]),
+                    "Gender": pickRandom(genders, [0.56, 0.40, 0.04]),
+                    "Age": randomNormal(38, 12),
+                    "Baseline_Income_USD": baseIncome,
+                    "Endline_Income_USD": endIncome,
+                    "Household_Size": Math.floor(Math.random() * 7) + 2,
+                    "Support_Value_USD": pickRandom(supportVals, [0.3, 0.3, 0.2, 0.1, 0.1]),
+                    "Feedback_Rating": pickRandom([1, 2, 3, 4, 5], [0.05, 0.1, 0.2, 0.35, 0.3])
+                };
+
+                // Introduce mock blanks to simulate field data issues
+                if (i % 18 === 0) row["Age"] = null;
+                if (i % 25 === 0) row["Feedback_Rating"] = null;
+
+                list.push(row);
+            }
+
+            // Inject 1 duplicate row exactly
+            list.push(JSON.parse(JSON.stringify(list[5])));
+
+            return list;
+        }
+
+        // Onboarding triggers
+        function loadSimulatedData() {
+            const data = generateSampleDataset();
+            window.state.rawDf = JSON.parse(JSON.stringify(data));
+            window.state.cleanedDf = JSON.parse(JSON.stringify(data));
+            window.state.columns = Object.keys(data[0]);
+            window.state.history = [];
+
+            recordAction("Loaded simulated MEAL dataset with Coordinates, Baseline, and Endline columns.");
+            triggerAlert("Dataset Loaded", "Demo tracking sheet with PII, GIS and Delta variables imported successfully!", "success");
+            
+            document.getElementById('overview-container').classList.remove('hidden');
+            renderOverviewTab();
+            updateLiveIndicators();
+            switchTab('upload');
+        }
+
+        // Reset to original file state
+        function resetToRaw() {
+            if (!window.state.rawDf) {
+                triggerAlert("No Data", "Please load a file first.", "info");
+                return;
+            }
+            window.state.cleanedDf = JSON.parse(JSON.stringify(window.state.rawDf));
+            window.state.columns = Object.keys(window.state.cleanedDf[0]);
+            window.state.history = [];
+            recordAction("Reverted dataset back to the initial uploaded raw state.");
+            triggerAlert("Restored File", "Working preview reverted back to original data.", "info");
+            
+            renderOverviewTab();
+            updateLiveIndicators();
+            if (window.state.activeTab === 'clean') renderCleanDataTab();
+        }
+
+        // Upload File Processing and Parsing (SheetJS & PapaParse integration with local fallback)
+        const fileUploader = document.getElementById('file-uploader');
+        fileUploader.addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            const fileName = file.name;
+
+            if (fileName.endsWith('.csv')) {
+                reader.onload = function(evt) {
+                    const csvText = evt.target.result;
+                    
+                    if (typeof Papa !== 'undefined') {
+                        Papa.parse(csvText, {
+                            header: true,
+                            skipEmptyLines: true,
+                            dynamicTyping: true,
+                            complete: function(results) {
+                                if (results.data && results.data.length > 0) {
+                                    processParsedData(results.data, fileName);
+                                } else {
+                                    triggerAlert("Invalid CSV", "Unable to find structural data rows inside CSV.", "error");
+                                }
+                            }
+                        });
+                    } else {
+                        console.info('Using built-in custom offline CSV parser.');
+                        const parsedData = customCSVParser(csvText);
+                        if (parsedData.length > 0) {
+                            processParsedData(parsedData, fileName);
+                        } else {
+                            triggerAlert("Invalid CSV", "The offline parser failed to read structures. Ensure correct CSV formatting.", "error");
+                        }
+                    }
+                };
+                reader.readAsText(file);
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                if (typeof XLSX === 'undefined') {
+                    triggerAlert("Excel Engine Blocked", "Excel binary files (.xlsx) cannot be decoded because external script libraries are blocked. Please convert your sheet to CSV first or use the Clipboard tool.", "error");
+                    return;
+                }
+                reader.onload = function(evt) {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet);
+                    
+                    if (jsonData && jsonData.length > 0) {
+                        processParsedData(jsonData, fileName);
+                    } else {
+                        triggerAlert("Invalid Excel", "No active records found inside sheet.", "error");
+                    }
+                };
+                reader.readAsBinaryString(file);
+            }
+        }
+
+        function processParsedData(jsonData, fileName) {
+            const cleanKeys = Object.keys(jsonData[0]);
+            const normalized = jsonData.map(row => {
+                const normRow = {};
+                cleanKeys.forEach(k => {
+                    normRow[k] = row[k] === undefined ? null : row[k];
+                });
+                return normRow;
+            });
+
+            window.state.rawDf = JSON.parse(JSON.stringify(normalized));
+            window.state.cleanedDf = JSON.parse(JSON.stringify(normalized));
+            window.state.columns = cleanKeys;
+            window.state.history = [];
+
+            recordAction(`Uploaded file '${fileName}' containing ${normalized.length} rows.`);
+            triggerAlert("Success", `${fileName} imported. Proceed to Data Cleaning panels!`, "success");
+
+            // Display UI status
+            document.getElementById('upload-status-text').textContent = `Active dataset: ${fileName} (${normalized.length} rows)`;
+            document.getElementById('upload-status').classList.remove('hidden');
+            document.getElementById('overview-container').classList.remove('hidden');
+
+            renderOverviewTab();
+            updateLiveIndicators();
+        }
+
+        // Live KPI updating
+        function updateLiveIndicators() {
+            const totalRecords = window.state.cleanedDf ? window.state.cleanedDf.length : 0;
+            const totalCols = window.state.columns ? window.state.columns.length : 0;
+            const logCount = window.state.history.length;
+
+            document.getElementById('sidebar-total-records').textContent = totalRecords;
+            document.getElementById('sidebar-total-cols').textContent = totalCols;
+            document.getElementById('sidebar-total-logs').textContent = logCount;
+
+            if (window.state.cleanedDf) {
+                let missingCount = 0;
+                window.state.cleanedDf.forEach(row => {
+                    window.state.columns.forEach(col => {
+                        if (row[col] === null || row[col] === undefined || row[col] === "") {
+                            missingCount++;
+                        }
+                    });
+                });
+
+                let dupCount = 0;
+                const seen = new Set();
+                window.state.cleanedDf.forEach(row => {
+                    const str = JSON.stringify(row);
+                    if (seen.has(str)) {
+                        dupCount++;
+                    } else {
+                        seen.add(str);
+                    }
+                });
+
+                document.getElementById('kpi-total-records').textContent = totalRecords;
+                document.getElementById('kpi-total-cols').textContent = totalCols;
+                document.getElementById('kpi-missing-vals').textContent = missingCount;
+                document.getElementById('kpi-duplicates').textContent = dupCount;
+
+                const cleanDups = document.getElementById('clean-dups-count');
+                if (cleanDups) cleanDups.textContent = dupCount;
+            }
+        }
+
+        // Main Tab 1 Data Table render engine
+        function renderOverviewTab() {
+            if (!window.state.cleanedDf) return;
+            
+            const theadTr = document.getElementById('overview-thead-tr');
+            const tbody = document.getElementById('overview-tbody');
+            
+            theadTr.innerHTML = window.state.columns.map(col => `
+                <th class="px-4 py-2 border-r border-slate-200">${col}</th>
+            `).join('');
+
+            const slice = window.state.cleanedDf.slice(0, 15);
+            tbody.innerHTML = slice.map((row, idx) => `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-200">
+                    ${window.state.columns.map(col => {
+                        const val = row[col];
+                        const isNull = val === null || val === undefined || val === "";
+                        return `<td class="px-4 py-2 border-r border-slate-200 font-mono ${isNull ? 'bg-rose-50 text-rose-500 italic' : ''}">
+                            ${isNull ? 'null/blank' : val}
+                        </td>`;
+                    }).join('')}
+                </tr>
+            `).join('');
+
+            document.getElementById('table-row-counter').textContent = `Showing first ${slice.length} records of ${window.state.cleanedDf.length}`;
+        }
+
+        // Tab 2 Clean Table rendering engine
+        function renderCleanDataTab() {
+            if (!window.state.cleanedDf) return;
+
+            const theadTr = document.getElementById('clean-thead-tr');
+            const tbody = document.getElementById('clean-tbody');
+            
+            theadTr.innerHTML = window.state.columns.map(col => `
+                <th class="px-4 py-2 border-r border-slate-200">${col}</th>
+            `).join('');
+
+            const slice = window.state.cleanedDf.slice(0, 25);
+            tbody.innerHTML = slice.map(row => `
+                <tr class="hover:bg-slate-50 border-b border-slate-200">
+                    ${window.state.columns.map(col => {
+                        const val = row[col];
+                        const isNull = val === null || val === undefined || val === "";
+                        return `<td class="px-4 py-2 border-r border-slate-200 font-mono ${isNull ? 'bg-rose-50 text-rose-500 italic' : ''}">
+                            ${isNull ? 'null' : val}
+                        </td>`;
+                    }).join('')}
+                </tr>
+            `).join('');
+
+            document.getElementById('clean-preview-total').textContent = `Showing first ${slice.length} rows of ${window.state.cleanedDf.length} total`;
+
+            populateCleaningDropdowns();
+        }
+
+        function populateCleaningDropdowns() {
+            const nullSelect = document.getElementById('null-col-select');
+            const renameSelect = document.getElementById('rename-col-select');
+            const filterSelect = document.getElementById('filter-col-select');
+            const castSelect = document.getElementById('cast-col-select');
+            const piiSelect = document.getElementById('pii-col-select');
+
+            const optionHTML = window.state.columns.map(col => `<option value="${col}">${col}</option>`).join('');
+            
+            nullSelect.innerHTML = optionHTML;
+            renameSelect.innerHTML = optionHTML;
+            filterSelect.innerHTML = optionHTML;
+            castSelect.innerHTML = optionHTML;
+            piiSelect.innerHTML = optionHTML;
+
+            // Auto-select Beneficiary_Name if present
+            if (window.state.columns.includes("Beneficiary_Name")) {
+                piiSelect.value = "Beneficiary_Name";
+            }
+
+            onRenameColChange();
+            onFilterColChange();
+
+            const radios = document.getElementsByName('null-strat');
+            radios.forEach(r => {
+                r.onchange = () => {
+                    const customDiv = document.getElementById('null-custom-div');
+                    if (r.value === 'custom') {
+                        customDiv.classList.remove('hidden');
+                    } else {
+                        customDiv.classList.add('hidden');
+                    }
+                };
+            });
+
+            // Populate Power Query fields
+            populatePowerQuerySelectors();
+        }
+
+        function onRenameColChange() {
+            const renameSelect = document.getElementById('rename-col-select');
+            const renameInput = document.getElementById('rename-col-input');
+            if (renameSelect.value) {
+                renameInput.value = renameSelect.value;
+            }
+        }
+
+        function onFilterColChange() {
+            const filterSelect = document.getElementById('filter-col-select').value;
+            const numericDiv = document.getElementById('filter-numeric-inputs');
+            const categoricalDiv = document.getElementById('filter-categorical-inputs');
+            const catChecklist = document.getElementById('filter-cat-checklist');
+
+            if (!filterSelect || !window.state.cleanedDf) return;
+
+            const values = window.state.cleanedDf.map(row => row[filterSelect]).filter(v => v !== null && v !== undefined);
+            const isNumeric = values.every(v => !isNaN(Number(v)));
+
+            if (isNumeric && values.length > 0) {
+                numericDiv.classList.remove('hidden');
+                categoricalDiv.classList.add('hidden');
+                
+                const min = Math.min(...values.map(Number));
+                const max = Math.max(...values.map(Number));
+                
+                document.getElementById('filter-num-min').value = min;
+                document.getElementById('filter-num-max').value = max;
+            } else {
+                numericDiv.classList.add('hidden');
+                categoricalDiv.classList.remove('hidden');
+
+                const uniqueCategories = [...new Set(values)];
+                catChecklist.innerHTML = uniqueCategories.map((cat, index) => `
+                    <label class="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" name="filter-cat-option" value="${cat}" checked>
+                        <span>${cat}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        // PII SANITIZER ENGINE
+        function applyPIISanitizer() {
+            const col = document.getElementById('pii-col-select').value;
+            const mode = document.querySelector('input[name="pii-mode"]:checked').value;
+
+            if (!col) return;
+
+            let count = 0;
+            window.state.cleanedDf.forEach((row, index) => {
+                if (row[col] !== null && row[col] !== undefined) {
+                    const originalStr = String(row[col]);
+                    if (mode === 'hash') {
+                        // Simple browser-safe fast hashing representation to create synthetic strings
+                        let hash = 0;
+                        for (let i = 0; i < originalStr.length; i++) {
+                            const char = originalStr.charCodeAt(i);
+                            hash = ((hash << 5) - hash) + char;
+                            hash = hash & hash; // Convert to 32bit integer
+                        }
+                        row[col] = `HASH-${Math.abs(hash).toString(16).substring(0, 6)}`;
+                    } else if (mode === 'mask') {
+                        // Mask details (e.g., keep first 2 chars and stars for the rest)
+                        if (originalStr.length > 4) {
+                            row[col] = originalStr.substring(0, 2) + "****" + originalStr.substring(originalStr.length - 2);
+                        } else {
+                            row[col] = "****";
+                        }
+                    }
+                    count++;
+                }
+            });
+
+            recordAction(`Anonymized PII fields in column '${col}' across ${count} records using ${mode.toUpperCase()} protection.`);
+            triggerAlert("Anonymization Success", `Redacted and protected ${count} data lines inside ${col}!`, "success");
+            renderCleanDataTab();
+            updateLiveIndicators();
+        }
+
+        // CLEANING ACTION: Drop Duplicates
+        function dropDuplicates() {
+            const before = window.state.cleanedDf.length;
+            const seen = new Set();
+            const unique = [];
+
+            window.state.cleanedDf.forEach(row => {
+                const str = JSON.stringify(row);
+                if (!seen.has(str)) {
+                    seen.add(str);
+                    unique.push(row);
+                }
+            });
+
+            window.state.cleanedDf = unique;
+            const removedCount = before - unique.length;
+
+            recordAction(`Dropped exact duplicate rows. Removed ${removedCount} duplicate record(s).`);
+            triggerAlert("Duplicates Cleared", `Successfully removed ${removedCount} records.`, "success");
+
+            renderCleanDataTab();
+            updateLiveIndicators();
+        }
+
+        // CLEANING ACTION: Resolve Missing Blank Cells
+        function cleanMissingValues() {
+            const col = document.getElementById('null-col-select').value;
+            const strategy = document.querySelector('input[name="null-strat"]:checked').value;
+            const customVal = document.getElementById('null-custom-val').value;
+
+            if (!col) return;
+
+            const originalLength = window.state.cleanedDf.length;
+
+            if (strategy === 'drop') {
+                window.state.cleanedDf = window.state.cleanedDf.filter(row => {
+                    const v = row[col];
+                    return v !== null && v !== undefined && v !== "";
+                });
+                const dropped = originalLength - window.state.cleanedDf.length;
+                recordAction(`Dropped ${dropped} record rows containing null values in column '${col}'.`);
+                triggerAlert("Resolution Applied", `Dropped ${dropped} missing cell rows.`, "success");
+            } else if (strategy === 'avg') {
+                const nonNulls = window.state.cleanedDf.map(row => row[col]).filter(v => v !== null && v !== undefined && v !== "");
+                let fillValue = "";
+                
+                const isNumeric = nonNulls.every(v => !isNaN(Number(v)));
+                if (isNumeric && nonNulls.length > 0) {
+                    const sum = nonNulls.reduce((a, b) => a + Number(b), 0);
+                    fillValue = Math.round((sum / nonNulls.length) * 100) / 100;
+                } else if (nonNulls.length > 0) {
+                    const freq = {};
+                    let maxFreq = 0;
+                    nonNulls.forEach(v => {
+                        freq[v] = (freq[v] || 0) + 1;
+                        if (freq[v] > maxFreq) {
+                            maxFreq = freq[v];
+                            fillValue = v;
+                        }
+                    });
+                } else {
+                    fillValue = "N/A";
+                }
+
+                let fillCount = 0;
+                window.state.cleanedDf.forEach(row => {
+                    if (row[col] === null || row[col] === undefined || row[col] === "") {
+                        row[col] = fillValue;
+                        fillCount++;
+                    }
+                });
+
+                recordAction(`Filled ${fillCount} missing cells in column '${col}' with calculated aggregate profile: '${fillValue}'.`);
+                triggerAlert("Resolution Applied", `Filled ${fillCount} blank rows with value: ${fillValue}.`, "success");
+            } else if (strategy === 'custom') {
+                let fillCount = 0;
+                window.state.cleanedDf.forEach(row => {
+                    if (row[col] === null || row[col] === undefined || row[col] === "") {
+                        row[col] = customVal;
+                        fillCount++;
+                    }
+                });
+                recordAction(`Filled ${fillCount} empty cells in column '${col}' with manual text value '${customVal}'.`);
+                triggerAlert("Resolution Applied", `Filled ${fillCount} missing rows with '${customVal}'.`, "success");
+            }
+
+            renderCleanDataTab();
+            updateLiveIndicators();
+        }
+
+        // CLEANING ACTION: Rename Sheet Header Labels
+        function renameColumn() {
+            const oldCol = document.getElementById('rename-col-select').value;
+            const newCol = document.getElementById('rename-col-input').value.trim();
+
+            if (!oldCol || !newCol || oldCol === newCol) {
+                triggerAlert("Incorrect rename input", "Select different rename targets.", "error");
+                return;
+            }
+
+            window.state.cleanedDf.forEach(row => {
+                row[newCol] = row[oldCol];
+                delete row[oldCol];
+            });
+
+            window.state.columns = window.state.columns.map(c => c === oldCol ? newCol : c);
+
+            recordAction(`Renamed column header '${oldCol}' to new structural key '${newCol}'.`);
+            triggerAlert("Column Renamed", `Header converted from ${oldCol} ➡️ ${newCol}`, "success");
+
+            renderCleanDataTab();
+            updateLiveIndicators();
+        }
+
+        // CLEANING ACTION: Apply Row Segment Filters
+        function applyFilter() {
+            const col = document.getElementById('filter-col-select').value;
+            if (!col) return;
+
+            const values = window.state.cleanedDf.map(row => row[col]).filter(v => v !== null && v !== undefined);
+            const isNumeric = values.every(v => !isNaN(Number(v)));
+            const originalLength = window.state.cleanedDf.length;
+
+            if (isNumeric && values.length > 0) {
+                const min = Number(document.getElementById('filter-num-min').value);
+                const max = Number(document.getElementById('filter-num-max').value);
+
+                window.state.cleanedDf = window.state.cleanedDf.filter(row => {
+                    const val = Number(row[col]);
+                    return val >= min && val <= max;
+                });
+                const keptCount = window.state.cleanedDf.length;
+                recordAction(`Filtered records on column '${col}' keeping numeric range segment values between [${min} to ${max}]. Kept ${keptCount} rows.`);
+                triggerAlert("Filter Applied", `Successfully filtered ${originalLength - keptCount} outlier rows.`, "success");
+            } else {
+                const checkboxes = document.getElementsByName('filter-cat-option');
+                const selectedCats = [];
+                checkboxes.forEach(chk => {
+                    if (chk.checked) selectedCats.push(chk.value);
+                });
+
+                window.state.cleanedDf = window.state.cleanedDf.filter(row => {
+                    return selectedCats.includes(String(row[col]));
+                });
+                const keptCount = window.state.cleanedDf.length;
+                recordAction(`Filtered column '${col}' keeping categorical options: [${selectedCats.join(', ')}]. Kept ${keptCount} rows.`);
+                triggerAlert("Filter Applied", `Kept ${keptCount} matching category items.`, "success");
+            }
+
+            renderCleanDataTab();
+            updateLiveIndicators();
+        }
+
+        // CLEANING ACTION: Cast Datatypes
+        function castDataType() {
+            const col = document.getElementById('cast-col-select').value;
+            const targetType = document.getElementById('cast-type-select').value;
+
+            if (!col) return;
+
+            let castSuccessCount = 0;
+            window.state.cleanedDf.forEach(row => {
+                if (row[col] !== null && row[col] !== undefined) {
+                    if (targetType === 'string') {
+                        row[col] = String(row[col]);
+                        castSuccessCount++;
+                    } else if (targetType === 'integer') {
+                        const parsed = parseInt(row[col]);
+                        row[col] = isNaN(parsed) ? null : parsed;
+                        castSuccessCount++;
+                    } else if (targetType === 'float') {
+                        const parsed = parseFloat(row[col]);
+                        row[col] = isNaN(parsed) ? null : parsed;
+                        castSuccessCount++;
+                    } else if (targetType === 'date') {
+                        const parsed = new Date(row[col]);
+                        row[col] = isNaN(parsed.getTime()) ? null : parsed.toISOString().split('T')[0];
+                        castSuccessCount++;
+                    }
+                }
+            });
+
+            recordAction(`Cast Column '${col}' datatypes to target casting representation format: '${targetType}' (${castSuccessCount} records evaluated).`);
+            triggerAlert("Type Cast Complete", `Column '${col}' successfully converted to type: ${targetType}`, "success");
+
+            renderCleanDataTab();
+            updateLiveIndicators();
+        }
+
+        // ================= POWER QUERY TRANSFORMATION LOGIC =================
+
+        function populatePowerQuerySelectors() {
+            if (!window.state.columns) return;
+
+            const condCol = document.getElementById('pq-cond-col');
+            const mathColA = document.getElementById('pq-math-colA');
+            const mathColBSelect = document.getElementById('pq-math-colB-select');
+            const textCol = document.getElementById('pq-text-col');
+            const mergeCol1 = document.getElementById('pq-merge-col1');
+            const mergeCol2 = document.getElementById('pq-merge-col2');
+
+            const optionHTML = window.state.columns.map(col => `<option value="${col}">${col}</option>`).join('');
+
+            condCol.innerHTML = optionHTML;
+            mathColA.innerHTML = optionHTML;
+            textCol.innerHTML = optionHTML;
+            mergeCol1.innerHTML = optionHTML;
+            mergeCol2.innerHTML = optionHTML;
+
+            // Math option can combine a column OR a constant value
+            mathColBSelect.innerHTML = `<option value="__constant__">Use Constant Value</option>` + optionHTML;
+        }
+
+        function onPQTypeChange() {
+            const selectedType = document.getElementById('pq-type-select').value;
+            
+            // Hide all sub-sections first
+            document.getElementById('pq-sec-conditional').classList.add('hidden');
+            document.getElementById('pq-sec-math').classList.add('hidden');
+            document.getElementById('pq-sec-text').classList.add('hidden');
+            document.getElementById('pq-sec-merge').classList.add('hidden');
+
+            // Show selected sub-section
+            if (selectedType === 'conditional') {
+                document.getElementById('pq-sec-conditional').classList.remove('hidden');
+            } else if (selectedType === 'math') {
+                document.getElementById('pq-sec-math').classList.remove('hidden');
+            } else if (selectedType === 'text') {
+                document.getElementById('pq-sec-text').classList.remove('hidden');
+            } else if (selectedType === 'merge') {
+                document.getElementById('pq-sec-merge').classList.remove('hidden');
+            }
+        }
+
+        function onPQMathColBChange() {
+            const val = document.getElementById('pq-math-colB-select').value;
+            const constantDiv = document.getElementById('pq-math-constant-div');
+            if (val === '__constant__') {
+                constantDiv.classList.remove('hidden');
+            } else {
+                constantDiv.classList.add('hidden');
+            }
+        }
+
+        function togglePQTextDelim() {
+            const action = document.querySelector('input[name="pq-text-action"]:checked').value;
+            const splitDiv = document.getElementById('pq-text-split-div');
+            if (action === 'split') {
+                splitDiv.classList.remove('hidden');
+            } else {
+                splitDiv.classList.add('hidden');
+            }
+        }
+
+        function applyPowerQuery() {
+            if (!window.state.cleanedDf) {
+                triggerAlert("No Dataset Loaded", "Please import a tracking dataset before applying transforms.", "error");
+                return;
+            }
+
+            const pqType = document.getElementById('pq-type-select').value;
+
+            if (pqType === 'conditional') {
+                applyConditionalColumnTransform();
+            } else if (pqType === 'math') {
+                applyMathColumnTransform();
+            } else if (pqType === 'text') {
+                applyTextTransform();
+            } else if (pqType === 'merge') {
+                applyMergeColumnsTransform();
+            }
+
+            renderCleanDataTab();
+            updateLiveIndicators();
+        }
+
+        function applyConditionalColumnTransform() {
+            const newColName = document.getElementById('pq-cond-newname').value.trim();
+            const ifCol = document.getElementById('pq-cond-col').value;
+            const op = document.getElementById('pq-cond-op').value;
+            const compVal = document.getElementById('pq-cond-val').value.trim();
+            const thenVal = document.getElementById('pq-cond-then').value;
+            const elseVal = document.getElementById('pq-cond-else').value;
+
+            if (!newColName) {
+                triggerAlert("Input Error", "Please provide a valid output column name.", "error");
+                return;
+            }
+
+            let applyCount = 0;
+            window.state.cleanedDf.forEach(row => {
+                const cellVal = row[ifCol];
+                let conditionMet = false;
+
+                if (op === 'equals') {
+                    conditionMet = (String(cellVal) === compVal);
+                } else if (op === 'notequal') {
+                    conditionMet = (String(cellVal) !== compVal);
+                } else if (op === 'gt') {
+                    conditionMet = (Number(cellVal) > Number(compVal));
+                } else if (op === 'lt') {
+                    conditionMet = (Number(cellVal) < Number(compVal));
+                } else if (op === 'contains') {
+                    conditionMet = (cellVal && String(cellVal).toLowerCase().includes(compVal.toLowerCase()));
+                }
+
+                row[newColName] = conditionMet ? thenVal : elseVal;
+                applyCount++;
+            });
+
+            if (!window.state.columns.includes(newColName)) {
+                window.state.columns.push(newColName);
+            }
+
+            recordAction("Applied Conditional Transform: Created Column '" + newColName + "' [If " + ifCol + " " + op + " \"" + compVal + "\" ➡️ \"" + thenVal + "\", Else \"" + elseVal + "\"].");
+            triggerAlert("Transform Applied", `Successfully created conditional column: ${newColName}`, "success");
+        }
+
+        function applyMathColumnTransform() {
+            const newColName = document.getElementById('pq-math-newname').value.trim();
+            const colA = document.getElementById('pq-math-colA').value;
+            const op = document.getElementById('pq-math-op').value;
+            const colBSelect = document.getElementById('pq-math-colB-select').value;
+            const constantVal = parseFloat(document.getElementById('pq-math-const').value);
+
+            if (!newColName) {
+                triggerAlert("Input Error", "Please provide a valid math target column name.", "error");
+                return;
+            }
+
+            let applyCount = 0;
+            window.state.cleanedDf.forEach(row => {
+                const valA = parseFloat(row[colA]);
+                const valB = (colBSelect === '__constant__') ? constantVal : parseFloat(row[colBSelect]);
+
+                if (isNaN(valA) || isNaN(valB)) {
+                    row[newColName] = null;
+                } else {
+                    let result = 0;
+                    if (op === 'add') result = valA + valB;
+                    else if (op === 'subtract') result = valA - valB;
+                    else if (op === 'multiply') result = valA * valB;
+                    else if (op === 'divide') {
+                        result = (valB !== 0) ? (valA / valB) : null;
+                    }
+                    row[newColName] = result !== null ? Math.round(result * 100) / 100 : null;
+                }
+                applyCount++;
+            });
+
+            if (!window.state.columns.includes(newColName)) {
+                window.state.columns.push(newColName);
+            }
+
+            const formulaDesc = (colBSelect === '__constant__') ? `${colA} ${op} ${constantVal}` : `${colA} ${op} ${colBSelect}`;
+            recordAction(`Applied Math Transform: Created Column '${newColName}' by calculating [${formulaDesc}].`);
+            triggerAlert("Transform Applied", `Successfully compiled math calculation: ${newColName}`, "success");
+        }
+
+        function applyTextTransform() {
+            const targetCol = document.getElementById('pq-text-col').value;
+            const action = document.querySelector('input[name="pq-text-action"]:checked').value;
+
+            if (!targetCol) return;
+
+            if (action === 'split') {
+                const delim = document.getElementById('pq-text-delim').value;
+                const partIndex = parseInt(document.getElementById('pq-text-part').value) || 0;
+                const splitColName = document.getElementById('pq-text-splitname').value.trim();
+
+                if (!delim || !splitColName) {
+                    triggerAlert("Input Error", "Provide delimiter parameter and a valid split column name.", "error");
+                    return;
+                }
+
+                window.state.cleanedDf.forEach(row => {
+                    if (row[targetCol] !== null && row[targetCol] !== undefined) {
+                        const parts = String(row[targetCol]).split(delim);
+                        row[splitColName] = parts[partIndex] ? parts[partIndex].trim() : null;
+                    } else {
+                        row[splitColName] = null;
+                    }
+                });
+
+                if (!window.state.columns.includes(splitColName)) {
+                    window.state.columns.push(splitColName);
+                }
+
+                recordAction(`Applied Split Transform: Extracted part index ${partIndex} from column '${targetCol}' by delimiter '${delim}' to target column '${splitColName}'.`);
+                triggerAlert("Split Complete", `Split results written to: ${splitColName}`, "success");
+
+            } else {
+                let textCount = 0;
+                window.state.cleanedDf.forEach(row => {
+                    if (row[targetCol] !== null && row[targetCol] !== undefined) {
+                        const stringVal = String(row[targetCol]);
+                        if (action === 'upper') row[targetCol] = stringVal.toUpperCase();
+                        else if (action === 'lower') row[targetCol] = stringVal.toLowerCase();
+                        else if (action === 'trim') row[targetCol] = stringVal.trim();
+                        textCount++;
+                    }
+                });
+
+                recordAction(`Applied Text Transform: Formatted characters to ${action.toUpperCase()} across column '${targetCol}'.`);
+                triggerAlert("Casing Applied", `Formatted ${textCount} fields successfully!`, "success");
+            }
+        }
+
+        function applyMergeColumnsTransform() {
+            const newColName = document.getElementById('pq-merge-newname').value.trim();
+            const col1 = document.getElementById('pq-merge-col1').value;
+            const separator = document.getElementById('pq-merge-sep').value;
+            const col2 = document.getElementById('pq-merge-col2').value;
+
+            if (!newColName) {
+                triggerAlert("Input Error", "Please provide a valid merged column output name.", "error");
+                return;
+            }
+
+            window.state.cleanedDf.forEach(row => {
+                const val1 = row[col1] !== null && row[col1] !== undefined ? String(row[col1]) : '';
+                const val2 = row[col2] !== null && row[col2] !== undefined ? String(row[col2]) : '';
+                row[newColName] = `${val1}${separator}${val2}`;
+            });
+
+            if (!window.state.columns.includes(newColName)) {
+                window.state.columns.push(newColName);
+            }
+
+            recordAction(`Applied Merge Transform: Compiled Column '${newColName}' combining [${col1}] and [${col2}] using separator: "${separator}".`);
+            triggerAlert("Merge Complete", `Merged columns into new structural key: ${newColName}`, "success");
+        }
+
+        // ====================================================================
+
+        // TAB 3: PROCESS & PIVOT CALCULATIONS
+        function populatePivotDropdowns() {
+            const groupSelect = document.getElementById('pivot-group-col');
+            const splitSelect = document.getElementById('pivot-split-col');
+            const valSelect = document.getElementById('pivot-val-col');
+
+            const optionHTML = window.state.columns.map(col => `<option value="${col}">${col}</option>`).join('');
+            groupSelect.innerHTML = optionHTML;
+            splitSelect.innerHTML = optionHTML;
+            valSelect.innerHTML = optionHTML;
+
+            if (window.state.columns.includes('Region')) groupSelect.value = 'Region';
+            if (window.state.columns.includes('Activity')) splitSelect.value = 'Activity';
+            if (window.state.columns.includes('Support_Value_USD')) valSelect.value = 'Support_Value_USD';
+
+            togglePivotSplitCol();
+            togglePivotValCol();
+        }
+
+        function populateDeltaDropdowns() {
+            const baseSelect = document.getElementById('delta-base-col');
+            const endSelect = document.getElementById('delta-end-col');
+
+            const optionHTML = window.state.columns.map(col => `<option value="${col}">${col}</option>`).join('');
+            baseSelect.innerHTML = optionHTML;
+            endSelect.innerHTML = optionHTML;
+
+            // Auto-detect simulated baseline/endline income variables if present
+            if (window.state.columns.includes('Baseline_Income_USD')) baseSelect.value = 'Baseline_Income_USD';
+            if (window.state.columns.includes('Endline_Income_USD')) endSelect.value = 'Endline_Income_USD';
+        }
+
+        function togglePivotSplitCol() {
+            const chk = document.getElementById('pivot-split-chk');
+            const div = document.getElementById('pivot-split-div');
+            if (chk.checked) {
+                div.classList.remove('hidden');
+            } else {
+                div.classList.add('hidden');
+            }
+        }
+
+        function togglePivotValCol() {
+            const agg = document.querySelector('input[name="pivot-agg"]:checked').value;
+            const div = document.getElementById('pivot-val-col-div');
+            if (agg !== 'count') {
+                div.classList.remove('hidden');
+            } else {
+                div.classList.add('hidden');
+            }
+        }
+
+        function calculatePivot() {
+            if (!window.state.cleanedDf) return;
+
+            const groupCol = document.getElementById('pivot-group-col').value;
+            const splitCol = document.getElementById('pivot-split-col').value;
+            const pivotSplit = document.getElementById('pivot-split-chk').checked;
+            const aggType = document.querySelector('input[name="pivot-agg"]:checked').value;
+            const valCol = document.getElementById('pivot-val-col').value;
+
+            const workingData = window.state.cleanedDf;
+
+            const tableHeadTr = document.getElementById('pivot-thead-tr');
+            const tableBody = document.getElementById('pivot-tbody');
+
+            if (!pivotSplit) {
+                const groups = {};
+                workingData.forEach(row => {
+                    const gVal = String(row[groupCol] === null ? 'Unknown' : row[groupCol]);
+                    if (!groups[gVal]) groups[gVal] = [];
+                    groups[gVal].push(row);
+                });
+
+                const results = [];
+                Object.keys(groups).forEach(g => {
+                    const rows = groups[g];
+                    let calcValue = 0;
+
+                    if (aggType === 'count') {
+                        calcValue = rows.length;
+                    } else {
+                        const numericValues = rows.map(r => Number(r[valCol])).filter(v => !isNaN(v) && r[valCol] !== null);
+                        if (numericValues.length > 0) {
+                            if (aggType === 'sum') {
+                                calcValue = numericValues.reduce((a, b) => a + b, 0);
+                            } else if (aggType === 'avg') {
+                                calcValue = numericValues.reduce((a, b) => a + b, 0) / numericValues.length;
+                            } else if (aggType === 'min') {
+                                calcValue = Math.min(...numericValues);
+                            } else if (aggType === 'max') {
+                                calcValue = Math.max(...numericValues);
+                            }
+                        } else {
+                            calcValue = 0;
+                        }
+                    }
+
+                    calcValue = Math.round(calcValue * 100) / 100;
+                    results.push({ group: g, value: calcValue });
+                });
+
+                const label = aggType === 'count' ? 'Record Count' : `${aggType.toUpperCase()} of ${valCol}`;
+                tableHeadTr.innerHTML = `
+                    <th class="px-4 py-2 border-r border-slate-200">${groupCol}</th>
+                    <th class="px-4 py-2 border-r border-slate-200">${label}</th>
+                `;
+
+                tableBody.innerHTML = results.map(res => `
+                    <tr class="hover:bg-slate-50 transition border-b border-slate-200">
+                        <td class="px-4 py-2 border-r border-slate-200 font-medium text-slate-800">${res.group}</td>
+                        <td class="px-4 py-2 border-r border-slate-200 font-mono font-bold text-teal-600">${res.value.toLocaleString()}</td>
+                    </tr>
+                `).join('');
+
+                renderSummaryChart(results.map(r => r.group), [
+                    {
+                        label: label,
+                        data: results.map(r => r.value),
+                        backgroundColor: '#0d9488'
+                    }
+                ]);
+
+            } else {
+                const rowsUnique = [...new Set(workingData.map(row => String(row[groupCol] === null ? 'Unknown' : row[groupCol])))];
+                const colsUnique = [...new Set(workingData.map(row => String(row[splitCol] === null ? 'Unknown' : row[splitCol])))];
+
+                const matrix = {};
+                rowsUnique.forEach(r => {
+                    matrix[r] = {};
+                    colsUnique.forEach(c => {
+                        matrix[r][c] = [];
+                    });
+                });
+
+                workingData.forEach(row => {
+                    const rVal = String(row[groupCol] === null ? 'Unknown' : row[groupCol]);
+                    const cVal = String(row[splitCol] === null ? 'Unknown' : row[splitCol]);
+                    if (matrix[rVal] && matrix[rVal][cVal]) {
+                        matrix[rVal][cVal].push(row);
+                    }
+                });
+
+                tableHeadTr.innerHTML = `
+                    <th class="px-4 py-2 border-r border-slate-200 bg-slate-100">${groupCol}</th>
+                    ${colsUnique.map(c => `<th class="px-4 py-2 border-r border-slate-200 bg-slate-100">${c}</th>`).join('')}
+                    <th class="px-4 py-2 border-r border-slate-200 bg-teal-50 font-bold text-teal-900">Total</th>
+                `;
+
+                let tableHtml = "";
+                const chartDatasets = colsUnique.map((col, index) => ({
+                    label: col,
+                    data: [],
+                    backgroundColor: ['#0d9488', '#0f766e', '#115e59', '#134e4a', '#14b8a6', '#2dd4bf'][index % 6]
+                }));
+
+                rowsUnique.forEach(r => {
+                    let rowHtml = `<tr class="border-b border-slate-200 hover:bg-slate-50">
+                        <td class="px-4 py-2 border-r border-slate-200 font-semibold text-slate-800">${r}</td>`;
+                    
+                    let rowTotal = 0;
+                    
+                    colsUnique.forEach((c, cIdx) => {
+                        const list = matrix[r][c];
+                        let val = 0;
+
+                        if (aggType === 'count') {
+                            val = list.length;
+                        } else {
+                            const numList = list.map(x => Number(x[valCol])).filter(v => !isNaN(v) && x[valCol] !== null);
+                            if (numList.length > 0) {
+                                if (aggType === 'sum') val = numList.reduce((a,b)=>a+b, 0);
+                                else if (aggType === 'avg') val = numList.reduce((a,b)=>a+b, 0) / numList.length;
+                                else if (aggType === 'min') val = Math.min(...numList);
+                                else if (aggType === 'max') val = Math.max(...numList);
+                            }
+                        }
+
+                        val = Math.round(val * 100) / 100;
+                        rowTotal += val;
+                        rowHtml += `<td class="px-4 py-2 border-r border-slate-200 font-mono">${val.toLocaleString()}</td>`;
+
+                        chartDatasets[cIdx].data.push(val);
+                    });
+
+                    rowHtml += `<td class="px-4 py-2 border-r border-slate-200 bg-teal-50/50 font-mono font-bold text-teal-800">${Math.round(rowTotal * 100) / 100}</td></tr>`;
+                    tableHtml += rowHtml;
+                });
+
+                tableBody.innerHTML = tableHtml;
+
+                renderSummaryChart(rowsUnique, chartDatasets);
+            }
+        }
+
+        function renderSummaryChart(labels, datasets) {
+            const ctx = document.getElementById('pivot-chart').getContext('2d');
+
+            if (activeChartInstance) {
+                activeChartInstance.destroy();
+            }
+
+            activeChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { size: 10 } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { size: 9 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 9 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // BASELINE VS ENDLINE DELTA TRACKER
+        function calculateIndicatorDelta() {
+            if (!window.state.cleanedDf) return;
+
+            const baseCol = document.getElementById('delta-base-col').value;
+            const endCol = document.getElementById('delta-end-col').value;
+
+            const validRows = window.state.cleanedDf.filter(row => {
+                const bVal = Number(row[baseCol]);
+                const eVal = Number(row[endCol]);
+                return !isNaN(bVal) && !isNaN(eVal) && row[baseCol] !== null && row[endCol] !== null;
+            });
+
+            if (validRows.length === 0) {
+                triggerAlert("Calculation Error", "No paired numeric values found in baseline and endline selections.", "error");
+                return;
+            }
+
+            const totalBase = validRows.reduce((sum, row) => sum + Number(row[baseCol]), 0);
+            const totalEnd = validRows.reduce((sum, row) => sum + Number(row[endCol]), 0);
+
+            const meanBase = totalBase / validRows.length;
+            const meanEnd = totalEnd / validRows.length;
+
+            const meanDiff = meanEnd - meanBase;
+            const percentageChange = (meanBase !== 0) ? (meanDiff / meanBase) * 100 : 0;
+
+            // Update Delta UI items
+            document.getElementById('delta-base-mean').textContent = meanBase.toFixed(1);
+            document.getElementById('delta-end-mean').textContent = meanEnd.toFixed(1);
+            
+            const pctEl = document.getElementById('delta-pct-change');
+            if (percentageChange >= 0) {
+                pctEl.textContent = `+${percentageChange.toFixed(1)}%`;
+                pctEl.className = "text-xl font-bold text-emerald-600";
+            } else {
+                pctEl.textContent = `${percentageChange.toFixed(1)}%`;
+                pctEl.className = "text-xl font-bold text-rose-600";
+            }
+
+            const cleanBaseLabel = baseCol.replace(/_/g, ' ');
+            const cleanEndLabel = endCol.replace(/_/g, ' ');
+            const direction = (percentageChange >= 0) ? "improvement" : "reduction";
+
+            const narrativeText = `Matched cohort evaluation highlights: **Pre-intervention mean** for '${cleanBaseLabel}' was **${meanBase.toFixed(1)}**, which evolved to a **post-intervention mean** of **${meanEnd.toFixed(1)}** for '${cleanEndLabel}'. This represents an overall **${direction} of ${Math.abs(percentageChange).toFixed(1)}%** directly following agricultural or financial resource injections.`;
+            document.getElementById('delta-narrative-output').innerHTML = narrativeText;
+            document.getElementById('delta-results-card').classList.remove('hidden');
+
+            recordAction(`Calculated baseline/endline outcomes for paired columns [${baseCol} ➡️ ${endCol}]. Delta variance: ${percentageChange.toFixed(1)}%.`);
+            triggerAlert("Delta Calculated", "Paired comparison analysis generated successfully!", "success");
+        }
+
+        // ====================================================================
+
+        // LEAFLET GIS MAP GENERATOR
+        function initializeLeafletGISMap() {
+            if (!window.state.cleanedDf) return;
+
+            // Search for latitude/longitude labels inside loaded schema
+            const columnsLower = window.state.columns.map(c => c.toLowerCase());
+            const latIndex = columnsLower.findIndex(c => c === 'latitude' || c === 'lat');
+            const lonIndex = columnsLower.findIndex(c => c === 'longitude' || c === 'lon' || c === 'lng');
+
+            const mapCard = document.getElementById('gis-map-card');
+
+            if (latIndex === -1 || lonIndex === -1) {
+                // GIS map remains hidden if coordinates cannot be processed
+                mapCard.classList.add('hidden');
+                return;
+            }
+
+            mapCard.classList.remove('hidden');
+
+            const latCol = window.state.columns[latIndex];
+            const lonCol = window.state.columns[lonIndex];
+
+            // Extract entries with clean numerical coordinates
+            const coordinatesList = window.state.cleanedDf.filter(row => {
+                const latVal = Number(row[latCol]);
+                const lonVal = Number(row[lonCol]);
+                return !isNaN(latVal) && !isNaN(lonVal) && row[latCol] !== null && row[lonCol] !== null;
+            });
+
+            if (coordinatesList.length === 0) return;
+
+            // Avoid map re-initialization crashes by cleaning old viewports
+            if (!leafletMapInstance) {
+                // Initialize Myanmar-centered coordinates
+                leafletMapInstance = L.map('leaflet-map-container').setView([20.0, 96.0], 5);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(leafletMapInstance);
+
+                mapMarkersLayer = L.layerGroup().addTo(leafletMapInstance);
+            } else {
+                // Clean old markers prior to drawing new data points
+                mapMarkersLayer.clearLayers();
+            }
+
+            // Scatter coordinate pins across Map
+            coordinatesList.forEach(row => {
+                const lat = Number(row[latCol]);
+                const lon = Number(row[lonCol]);
+                
+                const hoverText = `
+                    <div class="text-xs font-semibold space-y-1">
+                        <div class="border-b pb-1 mb-1 font-bold text-teal-700">Beneficiary: ${row.Beneficiary_ID || 'BEN'}</div>
+                        <div><b>Region:</b> ${row.Region || 'Unknown'}</div>
+                        <div><b>Activity:</b> ${row.Activity || 'Unknown'}</div>
+                        <div><b>USD Support:</b> $${row.Support_Value_USD || '0'}</div>
+                    </div>
+                `;
+
+                L.marker([lat, lon]).bindPopup(hoverText).addTo(mapMarkersLayer);
+            });
+
+            // Auto-adjust zoom to wrap coordinates
+            const coordinatesArray = coordinatesList.map(r => [Number(r[latCol]), Number(r[lonCol])]);
+            if (coordinatesArray.length > 0) {
+                leafletMapInstance.fitBounds(coordinatesArray, { padding: [20, 20] });
+            }
+
+            // Force recalculation of Leaflet boundaries in absolute sandboxes
+            setTimeout(() => {
+                leafletMapInstance.invalidateSize();
+            }, 300);
+        }
+
+        // ====================================================================
+
+        // TAB 4: AUTOMATED REPORT GENERATION & WRITING TEXTS
+        function compileNarrativeReport() {
+            if (!window.state.cleanedDf) return;
+
+            const df = window.state.cleanedDf;
+            const totalRecords = df.length;
+            const columnsLower = window.state.columns.map(c => c.toLowerCase());
+            const paragraphs = [];
+
+            paragraphs.push(`**Data Summary:** The current validated MEAL program dataset contains a baseline of **${totalRecords.toLocaleString()} validated recipient profiles** cross-checked on the ground.`);
+
+            const genderIndex = columnsLower.findIndex(c => c.includes('gender') || c.includes('sex'));
+            if (genderIndex !== -1) {
+                const colKey = window.state.columns[genderIndex];
+                const freqs = {};
+                df.forEach(r => {
+                    const g = r[colKey] || 'Other/Unreported';
+                    freqs[g] = (freqs[g] || 0) + 1;
+                });
+
+                const genderSummaries = Object.keys(freqs).map(g => {
+                    const pct = Math.round((freqs[g] / totalRecords) * 100);
+                    return `${g} participants make up ${pct}% of total interventions (${freqs[g]} individual registries)`;
+                });
+
+                paragraphs.push(`A gender-disaggregated baseline check reveals: **${genderSummaries.join(', and ')}** across current reporting cycles.`);
+            }
+
+            const regionIndex = columnsLower.findIndex(c => c.includes('region') || c.includes('state') || c.includes('district') || c.includes('location'));
+            if (regionIndex !== -1) {
+                const colKey = window.state.columns[regionIndex];
+                const freqs = {};
+                df.forEach(r => {
+                    const reg = r[colKey] || 'Unreported';
+                    freqs[reg] = (freqs[reg] || 0) + 1;
+                });
+
+                const sortedRegions = Object.keys(freqs).sort((a,b) => freqs[b] - freqs[a]);
+                if (sortedRegions.length > 0) {
+                    const topReg = sortedRegions[0];
+                    const topPct = Math.round((freqs[topReg] / totalRecords) * 100);
+                    let geoText = `From a geographical perspective, **${topReg} region registered the highest concentration of program activity**, accounting for **${topPct}% (${freqs[topReg].toLocaleString()} beneficiaries)** of tracked resource allocations.`;
+                    
+                    if (sortedRegions.length > 1) {
+                        const second = sortedRegions[1];
+                        const secPct = Math.round((freqs[second] / totalRecords) * 100);
+                        geoText += ` The next most prominent geographic workspace was **${second}**, which accounted for ${secPct}% of ongoing distributions.`;
+                    }
+                    paragraphs.push(geoText);
+                }
+            }
+
+            const numericColumns = window.state.columns.filter(col => {
+                const vals = df.map(row => row[col]).filter(v => v !== null && v !== undefined);
+                const isNumeric = vals.every(v => !isNaN(Number(v)));
+                return isNumeric && !col.toLowerCase().includes('id') && !col.toLowerCase().includes('rating') && !col.toLowerCase().includes('latitude') && !col.toLowerCase().includes('longitude');
+            });
+
+            if (numericColumns.length > 0) {
+                const numSummaries = [];
+                numericColumns.forEach(col => {
+                    const nonNulls = df.map(row => Number(row[col])).filter(v => !isNaN(v) && v !== null);
+                    if (nonNulls.length > 0) {
+                        const totalSum = nonNulls.reduce((a,b)=>a+b, 0);
+                        const mean = totalSum / nonNulls.length;
+                        const min = Math.min(...nonNulls);
+                        const max = Math.max(...nonNulls);
+                        
+                        numSummaries.push(`For the indicator index **'${col.replace(/_/g, ' ')}'**, the combined program output registered is **${Math.round(totalSum).toLocaleString()}**, averaging **${Math.round(mean * 10) / 10}** per recipient. Direct item distribution allocations ranged from a minimum baseline of ${min} up to a peak value of ${max}.`);
+                    }
+                });
+                paragraphs.push(numSummaries.join(' '));
+            }
+
+            const narrativeBox = document.getElementById('narrative-box');
+            narrativeBox.innerHTML = paragraphs.map(p => `<p class="mb-3">• ${p}</p>`).join('');
+
+            const plainText = paragraphs.map(p => `• ${p.replace(/\*\*/g, '')}`).join('\n\n');
+            document.getElementById('narrative-textarea').value = plainText;
+
+            generateProgrammaticInsights(df, columnsLower);
+        }
+
+        // Programmatic Core Insights generator
+        function generateProgrammaticInsights(df, columnsLower) {
+            const container = document.getElementById('insights-container');
+            const insights = [];
+
+            const ageIndex = columnsLower.findIndex(c => c.includes('age'));
+            if (ageIndex !== -1) {
+                const colKey = window.state.columns[ageIndex];
+                const youths = df.filter(row => Number(row[colKey]) < 18 && row[colKey] !== null).length;
+                const elderly = df.filter(row => Number(row[colKey]) > 60 && row[colKey] !== null).length;
+
+                if (youths > 0) {
+                    insights.push({
+                        title: "Youth Representation & Safeguarding",
+                        desc: `Detected ${youths} kids and minors under the age of 18 registered as main household beneficiary contacts. Safeguarding check: Ensure child protection Standard Operating Procedures (SOPs) are fully active and integrated across all local distribution sites.`,
+                        type: "alert"
+                    });
+                }
+                if (elderly > 0) {
+                    insights.push({
+                        title: "Vulnerability Index (Elderly Support)",
+                        desc: `Identified ${elderly} elder citizens over the age of 60. Operations advisory: Review site physical access structures, direct door-to-door distributions, or transport facilitation to avoid physical harm or stress during distribution lines.`,
+                        type: "info"
+                    });
+                }
+            }
+
+            const ratingIndex = columnsLower.findIndex(c => c.includes('rating') || c.includes('score') || c.includes('feedback'));
+            if (ratingIndex !== -1) {
+                const colKey = window.state.columns[ratingIndex];
+                const scores = df.map(row => Number(row[colKey])).filter(v => !isNaN(v) && v !== null);
+                
+                if (scores.length > 0) {
+                    const avgRating = scores.reduce((a,b)=>a+b, 0) / scores.length;
+                    const lowScorePct = (df.filter(r => Number(r[colKey]) <= 2).length / df.length) * 100;
+
+                    if (avgRating < 3.5) {
+                        insights.push({
+                            title: "Action Required: Average Satisfaction Drop",
+                            desc: `General program satisfaction ratings have slipped to ${Math.round(avgRating * 10) / 10} / 5.0. MEAL Advisory: Set up targeted Focus Group Discussions (FGDs) or Post-Distribution Monitoring (PDM) exercises to target bottlenecks.`,
+                            type: "alert"
+                        });
+                    } else if (lowScorePct > 15) {
+                        insights.push({
+                            title: "Outlier Alert: Negative Feedback Detected",
+                            desc: `${Math.round(lowScorePct)}% of beneficiaries rated feedback satisfaction score <= 2. Recommendation: Direct community feedback desks to isolate regional distribution anomalies.`,
+                            type: "alert"
+                        });
+                    } else {
+                        insights.push({
+                            title: "Positive Sentiment Stability",
+                            desc: `The average satisfaction score is robust at ${Math.round(avgRating * 10) / 10} / 5.0. Recommendation: Maintain current implementation models and uphold staff accountability frameworks.`,
+                            type: "success"
+                        });
+                    }
+                }
+            }
+
+            const regionIndex = columnsLower.findIndex(c => c.includes('region') || c.includes('state') || c.includes('district'));
+            if (regionIndex !== -1) {
+                const colKey = window.state.columns[regionIndex];
+                const freqs = {};
+                df.forEach(r => {
+                    const reg = r[colKey] || 'Unreported';
+                    freqs[reg] = (freqs[reg] || 0) + 1;
+                });
+
+                const sorted = Object.keys(freqs).sort((a,b) => freqs[b] - freqs[a]);
+                if (sorted.length > 1) {
+                    const maxCount = freqs[sorted[0]];
+                    const minCount = freqs[sorted[sorted.length - 1]];
+                    const ratio = maxCount / minCount;
+
+                    if (ratio > 3) {
+                        insights.push({
+                            title: "Resource Concentration Skew",
+                            desc: `Geographical distribution records are significantly concentrated. Primary location '${sorted[0]}' received over ${Math.round(ratio)}x the resource distribution volume compared to location '${sorted[sorted.length - 1]}'. Confirm geographic allocation schedules are in compliance with donor guidelines.`,
+                            type: "info"
+                        });
+                    }
+                }
+            }
+
+            if (insights.length === 0) {
+                insights.push({
+                    title: "Programmatic Balance Observed",
+                    desc: "Data patterns demonstrate balanced distributions across all gender categories, age brackets, and regional sectors. No operational flags triggered.",
+                    type: "success"
+                });
+            }
+
+            container.innerHTML = insights.map(ins => {
+                let borderTheme = "border-sky-200 bg-sky-50 text-sky-950";
+                let icon = '<i class="fa-solid fa-circle-info text-sky-600"></i>';
+                
+                if (ins.type === 'alert') {
+                    borderTheme = "border-amber-200 bg-amber-50 text-amber-950";
+                    icon = '<i class="fa-solid fa-circle-exclamation text-amber-600"></i>';
+                } else if (ins.type === 'success') {
+                    borderTheme = "border-emerald-200 bg-emerald-50 text-emerald-950";
+                    icon = '<i class="fa-solid fa-circle-check text-emerald-600"></i>';
+                }
+
+                return `
+                    <div class="border ${borderTheme} rounded-lg p-4 flex gap-3 text-xs leading-relaxed shadow-sm">
+                        <div class="text-base shrink-0">${icon}</div>
+                        <div>
+                            <h4 class="font-bold mb-0.5">${ins.title}</h4>
+                            <p class="text-slate-600">${ins.desc}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Clipboard copier
+        function copyNarrativeText() {
+            const textEl = document.getElementById('narrative-textarea');
+            textEl.select();
+            document.execCommand('copy');
+            triggerAlert("Copied to Clipboard", "The descriptive narrative text is successfully copied to your clipboard.", "success");
+        }
+
+        // Multi-Sheet XML spreadsheet builder fallback
+        function generateMultiSheetExcelXML(cleanedData, auditTrail) {
+            let xml = `<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n`;
+            xml += `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n`;
+            xml += ` xmlns:o="urn:schemas-microsoft-com:office:office"\n`;
+            xml += ` xmlns:x="urn:schemas-microsoft-com:office:excel"\n`;
+            xml += ` xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n`;
+            xml += ` xmlns:html="http://www.w3.org/TR/REC-html40">\n`;
+
+            xml += ` <Styles>\n`;
+            xml += `  <Style ss:ID="HeaderStyle">\n`;
+            xml += `   <Font ss:Bold="1" ss:Color="#FFFFFF" ss:Name="Arial"/>\n`;
+            xml += `   <Interior ss:Color="#0d9488" ss:Pattern="Solid"/>\n`;
+            xml += `   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n`;
+            xml += `  </Style>\n`;
+            xml += `  <Style ss:ID="DataStyle">\n`;
+            xml += `   <Font ss:Name="Arial"/>\n`;
+            xml += `  </Style>\n`;
+            xml += `  <Style ss:ID="TitleStyle">\n`;
+            xml += `   <Font ss:Size="14" ss:Bold="1" ss:Color="#0d9488" ss:Name="Arial"/>\n`;
+            xml += `  </Style>\n`;
+            xml += ` </Styles>\n`;
+
+            const esc = (val) => {
+                if (val === null || val === undefined) return '';
+                return String(val)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&apos;');
+            };
+
+            xml += ` <Worksheet ss:Name="Cleaned_Data">\n  <Table>\n`;
+            if (cleanedData.length > 0) {
+                const headers = Object.keys(cleanedData[0]);
+                xml += `   <Row ss:Height="22">\n`;
+                headers.forEach(h => {
+                    xml += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${esc(h)}</Data></Cell>\n`;
+                });
+                xml += `   </Row>\n`;
+                
+                cleanedData.forEach(row => {
+                    xml += `   <Row>\n`;
+                    headers.forEach(h => {
+                        const val = row[h];
+                        const isNum = typeof val === 'number' && !isNaN(val);
+                        const cellType = isNum ? 'Number' : 'String';
+                        xml += `    <Cell ss:StyleID="DataStyle"><Data ss:Type="${cellType}">${esc(val)}</Data></Cell>\n`;
+                    });
+                    xml += `   </Row>\n`;
+                });
+            } else {
+                xml += `   <Row><Cell><Data ss:Type="String">No records to display</Data></Cell></Row>\n`;
+            }
+            xml += `  </Table>\n </Worksheet>\n`;
+
+            xml += ` <Worksheet ss:Name="Cleaning_Audit_Trail">\n  <Table>\n`;
+            xml += `   <Row ss:Height="25">\n`;
+            xml += `    <Cell ss:StyleID="TitleStyle"><Data ss:Type="String">MEAL Action Logs &amp; Audit Trail</Data></Cell>\n`;
+            xml += `   </Row>\n`;
+            xml += `   <Row ss:Height="18">\n`;
+            xml += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Logged Transformation Steps</Data></Cell>\n`;
+            xml += `   </Row>\n`;
+
+            if (auditTrail.length > 0) {
+                auditTrail.forEach(log => {
+                    xml += `   <Row>\n`;
+                    xml += `    <Cell ss:StyleID="DataStyle"><Data ss:Type="String">${esc(log)}</Data></Cell>\n`;
+                    xml += `   </Row>\n`;
+                });
+            } else {
+                xml += `   <Row><Cell><Data ss:Type="String">No operations logged yet.</Data></Cell></Row>\n`;
+            }
+
+            xml += `  </Table>\n </Worksheet>\n`;
+            xml += `</Workbook>`;
+            return xml;
+        }
+
+        // TAB 5: EXPORT EXCEL GENERATION (SheetJS Multi-Sheet export with XML fallback)
+        function exportExcelFile() {
+            if (!window.state.cleanedDf) {
+                triggerAlert("No Data To Export", "Please load a dataset first.", "error");
+                return;
+            }
+
+            const customName = document.getElementById('export-filename').value.trim() || 'MEAL_Clean_Report';
+
+            if (typeof XLSX === 'undefined') {
+                console.info('Executing Multi-Sheet Excel XML Exporter (XLSX fallback).');
+                const xmlContent = generateMultiSheetExcelXML(window.state.cleanedDf, window.state.history);
+                const blob = new Blob([xmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                const link = document.createElement("a");
+                
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `${customName}.xls`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                triggerAlert("Excel XML Saved", `Workbook exported as ${customName}.xls (Excel compatible)`, "success");
+            } else {
+                const wb = XLSX.utils.book_new();
+
+                const ws1 = XLSX.utils.json_to_sheet(window.state.cleanedDf);
+                XLSX.utils.book_append_sheet(wb, ws1, "Cleaned_Data");
+
+                const formattedLogs = window.state.history.map(log => ({ "MEAL Action Logs & Audit Trail": log }));
+                const ws2 = XLSX.utils.json_to_sheet(formattedLogs);
+                XLSX.utils.book_append_sheet(wb, ws2, "Cleaning_Audit_Trail");
+
+                XLSX.writeFile(wb, `${customName}.xlsx`);
+                triggerAlert("Excel Saved", `Workbook ${customName}.xlsx exported successfully!`, "success");
+            }
+        }
+
+        function exportCSVFile() {
+            if (!window.state.cleanedDf) {
+                triggerAlert("No Data To Export", "Please load a dataset first.", "error");
+                return;
+            }
+
+            const customName = document.getElementById('export-filename').value.trim() || 'MEAL_Clean_Report';
+            let csvText = "";
+
+            if (typeof Papa !== 'undefined') {
+                csvText = Papa.unparse(window.state.cleanedDf);
+            } else {
+                const headers = Object.keys(window.state.cleanedDf[0]);
+                const rows = window.state.cleanedDf.map(row => {
+                    return headers.map(h => {
+                        let cell = row[h] === null || row[h] === undefined ? '' : String(row[h]);
+                        if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                            cell = `"${cell.replace(/"/g, '""')}"`;
+                        }
+                        return cell;
+                    }).join(',');
+                });
+                csvText = [headers.join(','), ...rows].join('\n');
+            }
+            
+            const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `${customName}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                triggerAlert("CSV Saved", `CSV data saved successfully!`, "success");
+            }
+        }
+    </script>
+</body>
+</html>
